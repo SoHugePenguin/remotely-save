@@ -1,39 +1,22 @@
-import {
-  Modal,
-  Notice,
-  Plugin,
-  Setting,
-  setIcon,
-  FileSystemAdapter,
-} from "obsidian";
+import {FileSystemAdapter, Modal, Notice, Plugin, setIcon, Setting,} from "obsidian";
 import cloneDeep from "lodash/cloneDeep";
-import type {
-  FileOrFolderMixedState,
-  RemotelySavePluginSettings,
-  SyncTriggerSourceType,
-} from "./baseTypes";
+import type {FileOrFolderMixedState, RemotelySavePluginSettings, SyncTriggerSourceType,} from "./baseTypes";
+import {COMMAND_CALLBACK, COMMAND_CALLBACK_DROPBOX, COMMAND_CALLBACK_ONEDRIVE, COMMAND_URI,} from "./baseTypes";
+import {importQrCodeUri} from "./importExport";
 import {
-  COMMAND_CALLBACK,
-  COMMAND_CALLBACK_ONEDRIVE,
-  COMMAND_CALLBACK_DROPBOX,
-  COMMAND_URI,
-} from "./baseTypes";
-import { importQrCodeUri } from "./importExport";
-import {
-  insertDeleteRecordByVault,
-  insertRenameRecordByVault,
-  insertSyncPlanRecordByVault,
-  loadFileHistoryTableByVault,
-  prepareDBs,
-  InternalDBs,
-  insertLoggerOutputByVault,
   clearExpiredLoggerOutputRecords,
   clearExpiredSyncPlanRecords,
+  insertDeleteRecordByVault,
+  insertLoggerOutputByVault,
+  insertRenameRecordByVault,
+  insertSyncPlanRecordByVault,
+  InternalDBs,
+  loadFileHistoryTableByVault,
+  prepareDBs,
 } from "./localdb";
-import { RemoteClient } from "./remote";
+import {RemoteClient} from "./remote";
 import {
   DEFAULT_DROPBOX_CONFIG,
-  getAuthUrlAndVerifier as getAuthUrlAndVerifierDropbox,
   sendAuthReq as sendAuthReqDropbox,
   setConfigBySuccessfullAuthInplace as setConfigBySuccessfullAuthInplaceDropbox,
 } from "./remoteForDropbox";
@@ -43,27 +26,33 @@ import {
   sendAuthReq as sendAuthReqOnedrive,
   setConfigBySuccessfullAuthInplace as setConfigBySuccessfullAuthInplaceOnedrive,
 } from "./remoteForOnedrive";
-import { DEFAULT_S3_CONFIG } from "./remoteForS3";
-import { DEFAULT_WEBDAV_CONFIG } from "./remoteForWebdav";
-import { RemotelySaveSettingTab } from "./settings";
-import { fetchMetadataFile, parseRemoteItems, SyncStatusType } from "./sync";
-import { doActualSync, getSyncPlan, isPasswordOk } from "./sync";
-import { messyConfigToNormal, normalConfigToMessy } from "./configPersist";
-import { ObsConfigDirFileType, listFilesInObsFolder } from "./obsFolderLister";
-import { I18n } from "./i18n";
-import type { LangType, LangTypeAndAuto, TransItemType } from "./i18n";
+import {DEFAULT_S3_CONFIG} from "./remoteForS3";
+import {DEFAULT_WEBDAV_CONFIG} from "./remoteForWebdav";
+import {RemotelySaveSettingTab} from "./settings";
+import {doActualSync, fetchMetadataFile, getSyncPlan, isPasswordOk, parseRemoteItems, SyncStatusType} from "./sync";
+import {messyConfigToNormal, normalConfigToMessy} from "./configPersist";
+import {listFilesInObsFolder, ObsConfigDirFileType} from "./obsFolderLister";
+import type {LangTypeAndAuto, TransItemType} from "./i18n";
+import {I18n} from "./i18n";
 
-import { DeletionOnRemote, MetadataOnRemote } from "./metadataOnRemote";
-import { SyncAlgoV2Modal } from "./syncAlgoV2Notice";
-import { applyPresetRulesInplace } from "./presetRules";
+import {SyncAlgoV2Modal} from "./syncAlgoV2Notice";
+import {applyPresetRulesInplace} from "./presetRules";
 
-import { applyLogWriterInplace, log } from "./moreOnLog";
+import {applyLogWriterInplace, log} from "./moreOnLog";
 import AggregateError from "aggregate-error";
-import {
-  exportVaultLoggerOutputToFiles,
-  exportVaultSyncPlansToFiles,
-} from "./debugMode";
-import { SizesConflictModal } from "./syncSizesConflictNotice";
+import {exportVaultLoggerOutputToFiles, exportVaultSyncPlansToFiles,} from "./debugMode";
+import {SizesConflictModal} from "./syncSizesConflictNotice";
+
+export function getBasePath() {
+  if (this.app.vault.adapter instanceof FileSystemAdapter) {
+    // in desktop
+    return this.app.vault.adapter.getBasePath().split("?")[0];
+  } else {
+    // in mobile
+    return this.app.vault.adapter.getResourcePath("").split("?")[0];
+  }
+}
+
 
 const DEFAULT_SETTINGS: RemotelySavePluginSettings = {
   s3: DEFAULT_S3_CONFIG,
@@ -71,7 +60,7 @@ const DEFAULT_SETTINGS: RemotelySavePluginSettings = {
   dropbox: DEFAULT_DROPBOX_CONFIG,
   onedrive: DEFAULT_ONEDRIVE_CONFIG,
   password: "",
-  serviceType: "s3",
+  serviceType: "webdav",
   currLogLevel: "info",
   // vaultRandomID: "", // deprecated
   autoRunEveryMilliseconds: -1,
@@ -218,6 +207,8 @@ export default class RemotelySavePlugin extends Plugin {
         client.serviceType,
         this.settings.password
       );
+
+
       const origMetadataOnRemote = await fetchMetadataFile(
         metadataFile,
         client,
@@ -319,6 +310,7 @@ export default class RemotelySavePlugin extends Plugin {
           maxSteps: `${MAX_STEPS}`,
         })
       );
+      console.log("success all (╯°□°）╯︵ ┻━┻")
       this.syncStatus = "finish";
       this.syncStatus = "idle";
 
@@ -850,6 +842,8 @@ export default class RemotelySavePlugin extends Plugin {
     }
   }
 
+
+
   getVaultBasePath() {
     if (this.app.vault.adapter instanceof FileSystemAdapter) {
       // in desktop
@@ -951,8 +945,7 @@ export default class RemotelySavePlugin extends Plugin {
     pathName: string,
     decision: string
   ) {
-    const msg = `syncing progress=${i}/${totalCount},decision=${decision},path=${pathName}`;
-    this.currSyncMsg = msg;
+    this.currSyncMsg = `syncing progress=${i}/${totalCount},decision=${decision},path=${pathName}`;
   }
 
   /**

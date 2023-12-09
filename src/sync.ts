@@ -1,55 +1,35 @@
-import {
-  TAbstractFile,
-  TFile,
-  TFolder,
-  Vault,
-  requireApiVersion,
-} from "obsidian";
+import {Notice, requireApiVersion, TAbstractFile, TFile, TFolder, Vault,} from "obsidian";
 import AggregateError from "aggregate-error";
 import PQueue from "p-queue";
 import type {
-  RemoteItem,
-  SyncTriggerSourceType,
   DecisionType,
   FileOrFolderMixedState,
+  RemoteItem,
   SUPPORTED_SERVICES_TYPE,
+  SyncTriggerSourceType,
 } from "./baseTypes";
-import { API_VER_STAT_FOLDER } from "./baseTypes";
-import {
-  decryptBase32ToString,
-  decryptBase64urlToString,
-  encryptStringToBase64url,
-  getSizeFromOrigToEnc,
-} from "./encrypt";
-import type { FileFolderHistoryRecord, InternalDBs } from "./localdb";
+import {API_VER_STAT_FOLDER} from "./baseTypes";
+import {decryptBase64urlToString, encryptStringToBase64url, getSizeFromOrigToEnc,} from "./encrypt";
+import type {FileFolderHistoryRecord, InternalDBs} from "./localdb";
 import {
   clearDeleteRenameHistoryOfKeyAndVault,
   getSyncMetaMappingByRemoteKeyAndVault,
   upsertSyncMetaMappingDataByVault,
 } from "./localdb";
+import {atWhichLevel, getParentFolder, isHiddenPath, isVaildText, mkdirpInVault, statFix, unixTimeToStr,} from "./misc";
+import {RemoteClient} from "./remote";
 import {
-  isHiddenPath,
-  isVaildText,
-  mkdirpInVault,
-  getFolderLevels,
-  getParentFolder,
-  atWhichLevel,
-  unixTimeToStr,
-  statFix,
-} from "./misc";
-import { RemoteClient } from "./remote";
-import {
-  MetadataOnRemote,
-  DeletionOnRemote,
-  serializeMetadataOnRemote,
-  deserializeMetadataOnRemote,
   DEFAULT_FILE_NAME_FOR_METADATAONREMOTE,
   DEFAULT_FILE_NAME_FOR_METADATAONREMOTE2,
+  DeletionOnRemote,
+  deserializeMetadataOnRemote,
   isEqualMetadataOnRemote,
+  MetadataOnRemote,
+  serializeMetadataOnRemote,
 } from "./metadataOnRemote";
-import { isInsideObsFolder, ObsConfigDirFileType } from "./obsFolderLister";
+import {isInsideObsFolder, ObsConfigDirFileType} from "./obsFolderLister";
 
-import { log } from "./moreOnLog";
+import {log} from "./moreOnLog";
 
 export type SyncStatusType =
   | "idle"
@@ -121,6 +101,7 @@ export const isPasswordOk = async (
       } as PasswordCheckType;
     }
   } catch (error) {
+    console.log(error, '????????????????????')
     return {
       ok: false,
       reason: "password_not_matched",
@@ -229,8 +210,7 @@ export const fetchMetadataFile = async (
     metadataFile.remoteEncryptedKey,
     true
   );
-  const metadata = deserializeMetadataOnRemote(buf);
-  return metadata;
+  return deserializeMetadataOnRemote(buf);
 };
 
 const isSkipItem = (
@@ -508,6 +488,15 @@ const assignOperationToFileInplace = (
 
   // 1. mtimeLocal
   if (r.existLocal) {
+
+    if (password !== "" && r.sizeLocal + Math.ceil(r.sizeLocal / (1024 * 1024)) * 16 + 28 == r.sizeRemoteEnc) {
+      console.log("仓库与本地字节数相同！文件大小：" + r.sizeLocal)
+      r.decision = "sameFileSize"
+      return r;
+    } else {
+      console.log("error:::", r.sizeLocal, r.sizeLocalEnc, r.sizeRemote, r.sizeRemoteEnc)
+    }
+
     const mtimeRemote = r.existRemote ? r.mtimeRemote : -1;
     const deltimeRemote = r.deltimeRemote !== undefined ? r.deltimeRemote : -1;
     const deltimeLocal = r.deltimeLocal !== undefined ? r.deltimeLocal : -1;
@@ -557,6 +546,7 @@ const assignOperationToFileInplace = (
           }
         }
       } else {
+        // 非必要不上传！
         // we have local laregest mtime,
         // and the remote not existing or smaller mtime
         if (skipSizeLargerThan <= 0) {
@@ -789,7 +779,7 @@ const assignOperationToFolderInplace = async (
       // if it was created after deletion, we should keep it as is
       if (requireApiVersion(API_VER_STAT_FOLDER)) {
         if (r.existLocal) {
-          const { ctime, mtime } = await statFix(vault, r.key);
+          const {ctime, mtime} = await statFix(vault, r.key);
           const cmtime = Math.max(ctime ?? 0, mtime ?? 0);
           if (
             !Number.isNaN(cmtime) &&
@@ -1062,6 +1052,7 @@ const dispatchOperationToActual = async (
   localDeleteFunc: any,
   password: string = ""
 ) => {
+  // 大文件卡死所在位置！！！！！！！！！！！！！！！！！！！！！！！！！
   let remoteEncryptedKey = key;
   if (password !== "") {
     remoteEncryptedKey = r.remoteEncryptedKey;
@@ -1072,6 +1063,7 @@ const dispatchOperationToActual = async (
       remoteEncryptedKey = await encryptStringToBase64url(key, password);
     }
   }
+
 
   if (r.decision === undefined) {
     throw Error(`unknown decision in ${JSON.stringify(r)}`);
@@ -1094,15 +1086,9 @@ const dispatchOperationToActual = async (
     }
     await clearDeleteRenameHistoryOfKeyAndVault(db, r.key, vaultRandomID);
   } else if (r.decision === "uploadLocalToRemote") {
-    if (
-      client.serviceType === "onedrive" &&
+    if (client.serviceType === "onedrive" &&
       r.sizeLocal === 0 &&
-      password === ""
-    ) {
-      // special treatment for empty files for OneDrive
-      // TODO: it's ugly, any other way?
-      // special treatment for OneDrive: do nothing, skip empty file without encryption
-      // if it's empty folder, or it's encrypted file/folder, it continues to be uploaded.
+      password === "") {
     } else {
       const remoteObjMeta = await client.uploadToRemote(
         r.key,
@@ -1111,6 +1097,7 @@ const dispatchOperationToActual = async (
         password,
         remoteEncryptedKey
       );
+
       await upsertSyncMetaMappingDataByVault(
         client.serviceType,
         db,
@@ -1193,8 +1180,6 @@ const dispatchOperationToActual = async (
 
 const splitThreeSteps = (syncPlan: SyncPlanType, sortedKeys: string[]) => {
   const mixedStates = syncPlan.mixedStates;
-  const totalCount = sortedKeys.length || 0;
-
   const folderCreationOps: FileOrFolderMixedState[][] = [];
   const deletionOps: FileOrFolderMixedState[][] = [];
   const uploadDownloads: FileOrFolderMixedState[][] = [];
@@ -1244,6 +1229,8 @@ const splitThreeSteps = (syncPlan: SyncPlanType, sortedKeys: string[]) => {
         uploadDownloads[0].push(val); // only one level needed here
       }
       realTotalCount += 1;
+    } else if (val.decision === "sameFileSize") {
+      console.log('%c远程与本地大小相同,%c跳过上传', 'color: blue', 'color: green')
     } else {
       throw Error(`unknown decision ${val.decision} for ${key}`);
     }
@@ -1322,13 +1309,13 @@ export const doActualSync = async (
         localDeleteFunc,
         password
       );
-      log.debug(`finished ${key}`);
+      new Notice(`finished ${key}`);
     }
 
     return; // shortcut return, avoid too many nests below
   }
 
-  const { folderCreationOps, deletionOps, uploadDownloads, realTotalCount } =
+  const {folderCreationOps, deletionOps, uploadDownloads, realTotalCount} =
     splitThreeSteps(syncPlan, sortedKeys);
   const nested = [folderCreationOps, deletionOps, uploadDownloads];
   const logTexts = [
@@ -1352,7 +1339,7 @@ export const doActualSync = async (
         continue;
       }
 
-      const queue = new PQueue({ concurrency: concurrency, autoStart: true });
+      const queue = new PQueue({concurrency: concurrency, autoStart: true});
       const potentialErrors: Error[] = [];
       let tooManyErrors = false;
 
@@ -1361,7 +1348,7 @@ export const doActualSync = async (
         const key = val.key;
 
         const fn = async () => {
-          log.debug(`start syncing "${key}" with plan ${JSON.stringify(val)}`);
+          console.log(`start syncing "${key}" with plan ${JSON.stringify(val)}`);
 
           if (callbackSyncProcess !== undefined) {
             await callbackSyncProcess(

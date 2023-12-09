@@ -1,47 +1,34 @@
-import type { _Object } from "@aws-sdk/client-s3";
+import type {_Object} from "@aws-sdk/client-s3";
 import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  HeadBucketCommand,
-  HeadObjectCommand,
-  HeadObjectCommandOutput,
-  ListObjectsV2Command,
-  ListObjectsV2CommandInput,
-  PutObjectCommand,
-  S3Client,
-  S3ClientConfig,
+    DeleteObjectCommand,
+    GetObjectCommand,
+    HeadBucketCommand,
+    HeadObjectCommand,
+    HeadObjectCommandOutput,
+    ListObjectsV2Command,
+    ListObjectsV2CommandInput,
+    PutObjectCommand,
+    S3Client,
+    S3ClientConfig,
 } from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
-import { HttpHandler, HttpRequest, HttpResponse } from "@aws-sdk/protocol-http";
-import {
-  FetchHttpHandler,
-  FetchHttpHandlerOptions,
-} from "@aws-sdk/fetch-http-handler";
+import {Upload} from "@aws-sdk/lib-storage";
+import {HttpRequest, HttpResponse} from "@aws-sdk/protocol-http";
+import {FetchHttpHandler, FetchHttpHandlerOptions,} from "@aws-sdk/fetch-http-handler";
 // @ts-ignore
-import { requestTimeout } from "@aws-sdk/fetch-http-handler/dist-es/request-timeout";
-import { buildQueryString } from "@aws-sdk/querystring-builder";
-import { HeaderBag, HttpHandlerOptions, Provider } from "@aws-sdk/types";
-import { Buffer } from "buffer";
+import {requestTimeout} from "@aws-sdk/fetch-http-handler/dist-es/request-timeout";
+import {buildQueryString} from "@aws-sdk/querystring-builder";
+import {HttpHandlerOptions} from "@aws-sdk/types";
+import {Buffer} from "buffer";
 import * as mime from "mime-types";
-import { Vault, requestUrl, RequestUrlParam } from "obsidian";
-import { Readable } from "stream";
+import {requestUrl, RequestUrlParam, Vault} from "obsidian";
+import {Readable} from "stream";
 import AggregateError from "aggregate-error";
-import {
-  DEFAULT_CONTENT_TYPE,
-  RemoteItem,
-  S3Config,
-  VALID_REQURL,
-} from "./baseTypes";
-import { decryptArrayBuffer, encryptArrayBuffer } from "./encrypt";
-import {
-  arrayBufferToBuffer,
-  bufferToArrayBuffer,
-  mkdirpInVault,
-} from "./misc";
+import {DEFAULT_CONTENT_TYPE, RemoteItem, S3Config, VALID_REQURL,} from "./baseTypes";
+import {decryptArrayBuffer, encryptArrayBuffer} from "./encrypt";
+import {bufferToArrayBuffer, mkdirpInVault,} from "./misc";
+import {log} from "./moreOnLog";
 
-export { S3Client } from "@aws-sdk/client-s3";
-
-import { log } from "./moreOnLog";
+export {S3Client} from "@aws-sdk/client-s3";
 
 ////////////////////////////////////////////////////////////////////////////////
 // special handler using Obsidian requestUrl
@@ -54,109 +41,112 @@ import { log } from "./moreOnLog";
  * But this uses Obsidian requestUrl instead.
  */
 class ObsHttpHandler extends FetchHttpHandler {
-  requestTimeoutInMs: number;
-  constructor(options?: FetchHttpHandlerOptions) {
-    super(options);
-    this.requestTimeoutInMs =
-      options === undefined ? undefined : options.requestTimeout;
-  }
-  async handle(
-    request: HttpRequest,
-    { abortSignal }: HttpHandlerOptions = {}
-  ): Promise<{ response: HttpResponse }> {
-    if (abortSignal?.aborted) {
-      const abortError = new Error("Request aborted");
-      abortError.name = "AbortError";
-      return Promise.reject(abortError);
+    requestTimeoutInMs: number;
+
+    constructor(options?: FetchHttpHandlerOptions) {
+        super(options);
+        this.requestTimeoutInMs =
+            options === undefined ? undefined : options.requestTimeout;
     }
 
-    let path = request.path;
-    if (request.query) {
-      const queryString = buildQueryString(request.query);
-      if (queryString) {
-        path += `?${queryString}`;
-      }
-    }
-
-    const { port, method } = request;
-    const url = `${request.protocol}//${request.hostname}${
-      port ? `:${port}` : ""
-    }${path}`;
-    const body =
-      method === "GET" || method === "HEAD" ? undefined : request.body;
-
-    const transformedHeaders: Record<string, string> = {};
-    for (const key of Object.keys(request.headers)) {
-      const keyLower = key.toLowerCase();
-      if (keyLower === "host" || keyLower === "content-length") {
-        continue;
-      }
-      transformedHeaders[keyLower] = request.headers[key];
-    }
-
-    let contentType: string = undefined;
-    if (transformedHeaders["content-type"] !== undefined) {
-      contentType = transformedHeaders["content-type"];
-    }
-
-    let transformedBody: any = body;
-    if (ArrayBuffer.isView(body)) {
-      transformedBody = bufferToArrayBuffer(body);
-    }
-
-    const param: RequestUrlParam = {
-      body: transformedBody,
-      headers: transformedHeaders,
-      method: method,
-      url: url,
-      contentType: contentType,
-    };
-
-    const raceOfPromises = [
-      requestUrl(param).then((rsp) => {
-        const headers = rsp.headers;
-        const headersLower: Record<string, string> = {};
-        for (const key of Object.keys(headers)) {
-          headersLower[key.toLowerCase()] = headers[key];
-        }
-        const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(new Uint8Array(rsp.arrayBuffer));
-            controller.close();
-          },
-        });
-        return {
-          response: new HttpResponse({
-            headers: headersLower,
-            statusCode: rsp.status,
-            body: stream,
-          }),
-        };
-      }),
-      requestTimeout(this.requestTimeoutInMs),
-    ];
-
-    if (abortSignal) {
-      raceOfPromises.push(
-        new Promise<never>((resolve, reject) => {
-          abortSignal.onabort = () => {
+    async handle(
+        request: HttpRequest,
+        {abortSignal}: HttpHandlerOptions = {}
+    ): Promise<{ response: HttpResponse }> {
+        if (abortSignal?.aborted) {
             const abortError = new Error("Request aborted");
             abortError.name = "AbortError";
-            reject(abortError);
-          };
-        })
-      );
-    }
-    return Promise.race(raceOfPromises);
-  }
-  updateHttpClientConfig(key: never, value: never): void {
-    // Implement this method if necessary
-  }
+            return Promise.reject(abortError);
+        }
 
-  httpHandlerConfigs(): {} {
-    // Implement this method if necessary
-    return {};
-  }
+        let path = request.path;
+        if (request.query) {
+            const queryString = buildQueryString(request.query);
+            if (queryString) {
+                path += `?${queryString}`;
+            }
+        }
+
+        const {port, method} = request;
+        const url = `${request.protocol}//${request.hostname}${
+            port ? `:${port}` : ""
+        }${path}`;
+        const body =
+            method === "GET" || method === "HEAD" ? undefined : request.body;
+
+        const transformedHeaders: Record<string, string> = {};
+        for (const key of Object.keys(request.headers)) {
+            const keyLower = key.toLowerCase();
+            if (keyLower === "host" || keyLower === "content-length") {
+                continue;
+            }
+            transformedHeaders[keyLower] = request.headers[key];
+        }
+
+        let contentType: string = undefined;
+        if (transformedHeaders["content-type"] !== undefined) {
+            contentType = transformedHeaders["content-type"];
+        }
+
+        let transformedBody: any = body;
+        if (ArrayBuffer.isView(body)) {
+            transformedBody = bufferToArrayBuffer(body);
+        }
+
+        const param: RequestUrlParam = {
+            body: transformedBody,
+            headers: transformedHeaders,
+            method: method,
+            url: url,
+            contentType: contentType,
+        };
+
+        const raceOfPromises = [
+            requestUrl(param).then((rsp) => {
+                const headers = rsp.headers;
+                const headersLower: Record<string, string> = {};
+                for (const key of Object.keys(headers)) {
+                    headersLower[key.toLowerCase()] = headers[key];
+                }
+                const stream = new ReadableStream<Uint8Array>({
+                    start(controller) {
+                        controller.enqueue(new Uint8Array(rsp.arrayBuffer));
+                        controller.close();
+                    },
+                });
+                return {
+                    response: new HttpResponse({
+                        headers: headersLower,
+                        statusCode: rsp.status,
+                        body: stream,
+                    }),
+                };
+            }),
+            requestTimeout(this.requestTimeoutInMs),
+        ];
+
+        if (abortSignal) {
+            raceOfPromises.push(
+                new Promise<never>((resolve, reject) => {
+                    abortSignal.onabort = () => {
+                        const abortError = new Error("Request aborted");
+                        abortError.name = "AbortError";
+                        reject(abortError);
+                    };
+                })
+            );
+        }
+        return Promise.race(raceOfPromises);
+    }
+
+    updateHttpClientConfig(key: never, value: never): void {
+        // Implement this method if necessary
+    }
+
+    httpHandlerConfigs(): {} {
+        // Implement this method if necessary
+        return {};
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -164,216 +154,216 @@ class ObsHttpHandler extends FetchHttpHandler {
 ////////////////////////////////////////////////////////////////////////////////
 
 export const DEFAULT_S3_CONFIG = {
-  s3Endpoint: "",
-  s3Region: "",
-  s3AccessKeyID: "",
-  s3SecretAccessKey: "",
-  s3BucketName: "",
-  bypassCorsLocally: true,
-  partsConcurrency: 20,
-  forcePathStyle: false,
+    s3Endpoint: "",
+    s3Region: "",
+    s3AccessKeyID: "",
+    s3SecretAccessKey: "",
+    s3BucketName: "",
+    bypassCorsLocally: true,
+    partsConcurrency: 20,
+    forcePathStyle: false,
 };
 
 export type S3ObjectType = _Object;
 
 const fromS3ObjectToRemoteItem = (x: S3ObjectType) => {
-  return {
-    key: x.Key,
-    lastModified: x.LastModified.valueOf(),
-    size: x.Size,
-    remoteType: "s3",
-    etag: x.ETag,
-  } as RemoteItem;
+    return {
+        key: x.Key,
+        lastModified: x.LastModified.valueOf(),
+        size: x.Size,
+        remoteType: "s3",
+        etag: x.ETag,
+    } as RemoteItem;
 };
 
 const fromS3HeadObjectToRemoteItem = (
-  key: string,
-  x: HeadObjectCommandOutput
+    key: string,
+    x: HeadObjectCommandOutput
 ) => {
-  return {
-    key: key,
-    lastModified: x.LastModified.valueOf(),
-    size: x.ContentLength,
-    remoteType: "s3",
-    etag: x.ETag,
-  } as RemoteItem;
+    return {
+        key: key,
+        lastModified: x.LastModified.valueOf(),
+        size: x.ContentLength,
+        remoteType: "s3",
+        etag: x.ETag,
+    } as RemoteItem;
 };
 
 export const getS3Client = (s3Config: S3Config) => {
-  let endpoint = s3Config.s3Endpoint;
-  if (!(endpoint.startsWith("http://") || endpoint.startsWith("https://"))) {
-    endpoint = `https://${endpoint}`;
-  }
-
-  let s3Client: S3Client;
-
-
-  const s3ClientConfig: S3ClientConfig = {
-    region: s3Config.s3Region,
-    endpoint: endpoint,
-    forcePathStyle: s3Config.forcePathStyle,
-    credentials: {
-      accessKeyId: s3Config.s3AccessKeyID,
-      secretAccessKey: s3Config.s3SecretAccessKey,
+    let endpoint = s3Config.s3Endpoint;
+    if (!(endpoint.startsWith("http://") || endpoint.startsWith("https://"))) {
+        endpoint = `https://${endpoint}`;
     }
-  };
 
-  
-  console.error(s3ClientConfig);
+    let s3Client: S3Client;
 
-  if (VALID_REQURL && s3Config.bypassCorsLocally) {
-    s3ClientConfig.requestHandler = new ObsHttpHandler();
-  }
-  s3Client = new S3Client(s3ClientConfig);
 
-  s3Client.middlewareStack.add(
-    (next, context) => (args) => {
-      (args.request as any).headers["cache-control"] = "no-cache";
-      return next(args);
-    },
-    {
-      step: "build",
+    const s3ClientConfig: S3ClientConfig = {
+        region: s3Config.s3Region,
+        endpoint: endpoint,
+        forcePathStyle: s3Config.forcePathStyle,
+        credentials: {
+            accessKeyId: s3Config.s3AccessKeyID,
+            secretAccessKey: s3Config.s3SecretAccessKey,
+        }
+    };
+
+
+    console.error(s3ClientConfig);
+
+    if (VALID_REQURL && s3Config.bypassCorsLocally) {
+        s3ClientConfig.requestHandler = new ObsHttpHandler();
     }
-  );
+    s3Client = new S3Client(s3ClientConfig);
 
-  return s3Client;
+    s3Client.middlewareStack.add(
+        (next, context) => (args) => {
+            (args.request as any).headers["cache-control"] = "no-cache";
+            return next(args);
+        },
+        {
+            step: "build",
+        }
+    );
+
+    return s3Client;
 };
 
 export const getRemoteMeta = async (
-  s3Client: S3Client,
-  s3Config: S3Config,
-  fileOrFolderPath: string
+    s3Client: S3Client,
+    s3Config: S3Config,
+    fileOrFolderPath: string
 ) => {
-  const res = await s3Client.send(
-    new HeadObjectCommand({
-      Bucket: s3Config.s3BucketName,
-      Key: fileOrFolderPath,
-    })
-  );
+    const res = await s3Client.send(
+        new HeadObjectCommand({
+            Bucket: s3Config.s3BucketName,
+            Key: fileOrFolderPath,
+        })
+    );
 
-  return fromS3HeadObjectToRemoteItem(fileOrFolderPath, res);
+    return fromS3HeadObjectToRemoteItem(fileOrFolderPath, res);
 };
 
 export const uploadToRemote = async (
-  s3Client: S3Client,
-  s3Config: S3Config,
-  fileOrFolderPath: string,
-  vault: Vault,
-  isRecursively: boolean = false,
-  password: string = "",
-  remoteEncryptedKey: string = "",
-  uploadRaw: boolean = false,
-  rawContent: string | ArrayBuffer = ""
+    s3Client: S3Client,
+    s3Config: S3Config,
+    fileOrFolderPath: string,
+    vault: Vault,
+    isRecursively: boolean = false,
+    password: string = "",
+    remoteEncryptedKey: string = "",
+    uploadRaw: boolean = false,
+    rawContent: string | ArrayBuffer = ""
 ) => {
-  let uploadFile = fileOrFolderPath;
-  if (password !== "") {
-    uploadFile = remoteEncryptedKey;
-  }
-  const isFolder = fileOrFolderPath.endsWith("/");
-
-  if (isFolder && isRecursively) {
-    throw Error("upload function doesn't implement recursive function yet!");
-  } else if (isFolder && !isRecursively) {
-    if (uploadRaw) {
-      throw Error(`you specify uploadRaw, but you also provide a folder key!`);
-    }
-    // folder
-    const contentType = DEFAULT_CONTENT_TYPE;
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: s3Config.s3BucketName,
-        Key: uploadFile,
-        Body: "",
-        ContentType: contentType,
-      })
-    );
-    return await getRemoteMeta(s3Client, s3Config, uploadFile);
-  } else {
-    // file
-    // we ignore isRecursively parameter here
-    let contentType = DEFAULT_CONTENT_TYPE;
-    if (password === "") {
-      contentType =
-        mime.contentType(
-          mime.lookup(fileOrFolderPath) || DEFAULT_CONTENT_TYPE
-        ) || DEFAULT_CONTENT_TYPE;
-    }
-    let localContent = undefined;
-    if (uploadRaw) {
-      if (typeof rawContent === "string") {
-        localContent = new TextEncoder().encode(rawContent).buffer;
-      } else {
-        localContent = rawContent;
-      }
-    } else {
-      localContent = await vault.adapter.readBinary(fileOrFolderPath);
-    }
-    let remoteContent = localContent;
+    let uploadFile = fileOrFolderPath;
     if (password !== "") {
-      remoteContent = await encryptArrayBuffer(localContent, password);
+        uploadFile = remoteEncryptedKey;
     }
+    const isFolder = fileOrFolderPath.endsWith("/");
 
-    const bytesIn5MB = 5242880;
-    const body = new Uint8Array(remoteContent);
-    const upload = new Upload({
-      client: s3Client,
-      queueSize: s3Config.partsConcurrency, // concurrency
-      partSize: bytesIn5MB, // minimal 5MB by default
-      leavePartsOnError: false,
-      params: {
-        Bucket: s3Config.s3BucketName,
-        Key: uploadFile,
-        Body: body,
-        ContentType: contentType,
-      },
-    });
-    await upload.done();
+    if (isFolder && isRecursively) {
+        throw Error("upload function doesn't implement recursive function yet!");
+    } else if (isFolder && !isRecursively) {
+        if (uploadRaw) {
+            throw Error(`you specify uploadRaw, but you also provide a folder key!`);
+        }
+        // folder
+        const contentType = DEFAULT_CONTENT_TYPE;
+        await s3Client.send(
+            new PutObjectCommand({
+                Bucket: s3Config.s3BucketName,
+                Key: uploadFile,
+                Body: "",
+                ContentType: contentType,
+            })
+        );
+        return await getRemoteMeta(s3Client, s3Config, uploadFile);
+    } else {
+        // file
+        // we ignore isRecursively parameter here
+        let contentType = DEFAULT_CONTENT_TYPE;
+        if (password === "") {
+            contentType =
+                mime.contentType(
+                    mime.lookup(fileOrFolderPath) || DEFAULT_CONTENT_TYPE
+                ) || DEFAULT_CONTENT_TYPE;
+        }
+        let localContent = undefined;
+        if (uploadRaw) {
+            if (typeof rawContent === "string") {
+                localContent = new TextEncoder().encode(rawContent).buffer;
+            } else {
+                localContent = rawContent;
+            }
+        } else {
+            localContent = await vault.adapter.readBinary(fileOrFolderPath);
+        }
+        let remoteContent = localContent;
+        if (password !== "") {
+            remoteContent = await encryptArrayBuffer(localContent, password);
+        }
 
-    return await getRemoteMeta(s3Client, s3Config, uploadFile);
-  }
+        const bytesIn5MB = 5242880;
+        const body = new Uint8Array(remoteContent);
+        const upload = new Upload({
+            client: s3Client,
+            queueSize: s3Config.partsConcurrency, // concurrency
+            partSize: bytesIn5MB, // minimal 5MB by default
+            leavePartsOnError: false,
+            params: {
+                Bucket: s3Config.s3BucketName,
+                Key: uploadFile,
+                Body: body,
+                ContentType: contentType,
+            },
+        });
+        await upload.done();
+
+        return await getRemoteMeta(s3Client, s3Config, uploadFile);
+    }
 };
 
 export const listFromRemote = async (
-  s3Client: S3Client,
-  s3Config: S3Config,
-  prefix?: string
+    s3Client: S3Client,
+    s3Config: S3Config,
+    prefix?: string
 ) => {
-  const confCmd = {
-    Bucket: s3Config.s3BucketName,
-  } as ListObjectsV2CommandInput;
-  if (prefix !== undefined) {
-    confCmd.Prefix = prefix;
-  }
-
-  const contents = [] as _Object[];
-
-  let isTruncated = true;
-  do {
-    const rsp = await s3Client.send(new ListObjectsV2Command(confCmd));
-
-    if (rsp.$metadata.httpStatusCode !== 200) {
-      throw Error("some thing bad while listing remote!");
+    const confCmd = {
+        Bucket: s3Config.s3BucketName,
+    } as ListObjectsV2CommandInput;
+    if (prefix !== undefined) {
+        confCmd.Prefix = prefix;
     }
-    if (rsp.Contents === undefined) {
-      break;
-    }
-    contents.push(...rsp.Contents);
 
-    isTruncated = rsp.IsTruncated;
-    confCmd.ContinuationToken = rsp.NextContinuationToken;
-    if (
-      isTruncated &&
-      (confCmd.ContinuationToken === undefined ||
-        confCmd.ContinuationToken === "")
-    ) {
-      throw Error("isTruncated is true but no continuationToken provided");
-    }
-  } while (isTruncated);
+    const contents = [] as _Object[];
 
-  // ensemble fake rsp
-  return {
-    Contents: contents.map((x) => fromS3ObjectToRemoteItem(x)),
-  };
+    let isTruncated = true;
+    do {
+        const rsp = await s3Client.send(new ListObjectsV2Command(confCmd));
+
+        if (rsp.$metadata.httpStatusCode !== 200) {
+            throw Error("some thing bad while listing remote!");
+        }
+        if (rsp.Contents === undefined) {
+            break;
+        }
+        contents.push(...rsp.Contents);
+
+        isTruncated = rsp.IsTruncated;
+        confCmd.ContinuationToken = rsp.NextContinuationToken;
+        if (
+            isTruncated &&
+            (confCmd.ContinuationToken === undefined ||
+                confCmd.ContinuationToken === "")
+        ) {
+            throw Error("isTruncated is true but no continuationToken provided");
+        }
+    } while (isTruncated);
+
+    // ensemble fake rsp
+    return {
+        Contents: contents.map((x) => fromS3ObjectToRemoteItem(x)),
+    };
 };
 
 /**
@@ -384,83 +374,83 @@ export const listFromRemote = async (
  * @returns Promise<ArrayBuffer>
  */
 const getObjectBodyToArrayBuffer = async (
-  b: Readable | ReadableStream | Blob
+    b: Readable | ReadableStream | Blob
 ) => {
-  if (b instanceof Readable) {
-    return (await new Promise((resolve, reject) => {
-      const chunks: Uint8Array[] = [];
-      b.on("data", (chunk) => chunks.push(chunk));
-      b.on("error", reject);
-      b.on("end", () => resolve(bufferToArrayBuffer(Buffer.concat(chunks))));
-    })) as ArrayBuffer;
-  } else if (b instanceof ReadableStream) {
-    return await new Response(b, {}).arrayBuffer();
-  } else if (b instanceof Blob) {
-    return await b.arrayBuffer();
-  } else {
-    throw TypeError(`The type of ${b} is not one of the supported types`);
-  }
+    if (b instanceof Readable) {
+        return (await new Promise((resolve, reject) => {
+            const chunks: Uint8Array[] = [];
+            b.on("data", (chunk) => chunks.push(chunk));
+            b.on("error", reject);
+            b.on("end", () => resolve(bufferToArrayBuffer(Buffer.concat(chunks))));
+        })) as ArrayBuffer;
+    } else if (b instanceof ReadableStream) {
+        return await new Response(b, {}).arrayBuffer();
+    } else if (b instanceof Blob) {
+        return await b.arrayBuffer();
+    } else {
+        throw TypeError(`The type of ${b} is not one of the supported types`);
+    }
 };
 
 const downloadFromRemoteRaw = async (
-  s3Client: S3Client,
-  s3Config: S3Config,
-  fileOrFolderPath: string
+    s3Client: S3Client,
+    s3Config: S3Config,
+    fileOrFolderPath: string
 ) => {
-  const data = await s3Client.send(
-    new GetObjectCommand({
-      Bucket: s3Config.s3BucketName,
-      Key: fileOrFolderPath,
-    })
-  );
-  const bodyContents = await getObjectBodyToArrayBuffer(data.Body);
-  return bodyContents;
+    const data = await s3Client.send(
+        new GetObjectCommand({
+            Bucket: s3Config.s3BucketName,
+            Key: fileOrFolderPath,
+        })
+    );
+    const bodyContents = await getObjectBodyToArrayBuffer(data.Body);
+    return bodyContents;
 };
 
 export const downloadFromRemote = async (
-  s3Client: S3Client,
-  s3Config: S3Config,
-  fileOrFolderPath: string,
-  vault: Vault,
-  mtime: number,
-  password: string = "",
-  remoteEncryptedKey: string = "",
-  skipSaving: boolean = false
+    s3Client: S3Client,
+    s3Config: S3Config,
+    fileOrFolderPath: string,
+    vault: Vault,
+    mtime: number,
+    password: string = "",
+    remoteEncryptedKey: string = "",
+    skipSaving: boolean = false
 ) => {
-  const isFolder = fileOrFolderPath.endsWith("/");
+    const isFolder = fileOrFolderPath.endsWith("/");
 
-  if (!skipSaving) {
-    await mkdirpInVault(fileOrFolderPath, vault);
-  }
-
-  // the file is always local file
-  // we need to encrypt it
-
-  if (isFolder) {
-    // mkdirp locally is enough
-    // do nothing here
-    return new ArrayBuffer(0);
-  } else {
-    let downloadFile = fileOrFolderPath;
-    if (password !== "") {
-      downloadFile = remoteEncryptedKey;
-    }
-    const remoteContent = await downloadFromRemoteRaw(
-      s3Client,
-      s3Config,
-      downloadFile
-    );
-    let localContent = remoteContent;
-    if (password !== "") {
-      localContent = await decryptArrayBuffer(remoteContent, password);
-    }
     if (!skipSaving) {
-      await vault.adapter.writeBinary(fileOrFolderPath, localContent, {
-        mtime: mtime,
-      });
+        await mkdirpInVault(fileOrFolderPath, vault);
     }
-    return localContent;
-  }
+
+    // the file is always local file
+    // we need to encrypt it
+
+    if (isFolder) {
+        // mkdirp locally is enough
+        // do nothing here
+        return new ArrayBuffer(0);
+    } else {
+        let downloadFile = fileOrFolderPath;
+        if (password !== "") {
+            downloadFile = remoteEncryptedKey;
+        }
+        const remoteContent = await downloadFromRemoteRaw(
+            s3Client,
+            s3Config,
+            downloadFile
+        );
+        let localContent = remoteContent;
+        if (password !== "") {
+            localContent = await decryptArrayBuffer(remoteContent, password);
+        }
+        if (!skipSaving) {
+            await vault.adapter.writeBinary(fileOrFolderPath, localContent, {
+                mtime: mtime,
+            });
+        }
+        return localContent;
+    }
 };
 
 /**
@@ -471,41 +461,41 @@ export const downloadFromRemote = async (
  * @returns
  */
 export const deleteFromRemote = async (
-  s3Client: S3Client,
-  s3Config: S3Config,
-  fileOrFolderPath: string,
-  password: string = "",
-  remoteEncryptedKey: string = ""
+    s3Client: S3Client,
+    s3Config: S3Config,
+    fileOrFolderPath: string,
+    password: string = "",
+    remoteEncryptedKey: string = ""
 ) => {
-  if (fileOrFolderPath === "/") {
-    return;
-  }
-  let remoteFileName = fileOrFolderPath;
-  if (password !== "") {
-    remoteFileName = remoteEncryptedKey;
-  }
-  await s3Client.send(
-    new DeleteObjectCommand({
-      Bucket: s3Config.s3BucketName,
-      Key: remoteFileName,
-    })
-  );
-
-  if (fileOrFolderPath.endsWith("/") && password === "") {
-    const x = await listFromRemote(s3Client, s3Config, fileOrFolderPath);
-    x.Contents.forEach(async (element) => {
-      await s3Client.send(
+    if (fileOrFolderPath === "/") {
+        return;
+    }
+    let remoteFileName = fileOrFolderPath;
+    if (password !== "") {
+        remoteFileName = remoteEncryptedKey;
+    }
+    await s3Client.send(
         new DeleteObjectCommand({
-          Bucket: s3Config.s3BucketName,
-          Key: element.key,
+            Bucket: s3Config.s3BucketName,
+            Key: remoteFileName,
         })
-      );
-    });
-  } else if (fileOrFolderPath.endsWith("/") && password !== "") {
-    // TODO
-  } else {
-    // pass
-  }
+    );
+
+    if (fileOrFolderPath.endsWith("/") && password === "") {
+        const x = await listFromRemote(s3Client, s3Config, fileOrFolderPath);
+        x.Contents.forEach(async (element) => {
+            await s3Client.send(
+                new DeleteObjectCommand({
+                    Bucket: s3Config.s3BucketName,
+                    Key: element.key,
+                })
+            );
+        });
+    } else if (fileOrFolderPath.endsWith("/") && password !== "") {
+        // TODO
+    } else {
+        // pass
+    }
 };
 
 /**
@@ -516,43 +506,43 @@ export const deleteFromRemote = async (
  * @returns
  */
 export const checkConnectivity = async (
-  s3Client: S3Client,
-  s3Config: S3Config,
-  callbackFunc?: any
+    s3Client: S3Client,
+    s3Config: S3Config,
+    callbackFunc?: any
 ) => {
-  try {
-    const results = await s3Client.send(
-      new HeadBucketCommand({ Bucket: s3Config.s3BucketName })
-    );
-    if (
-      results === undefined ||
-      results.$metadata === undefined ||
-      results.$metadata.httpStatusCode === undefined
-    ) {
-      const err = "results or $metadata or httStatusCode is undefined";
-      log.debug(err);
-      if (callbackFunc !== undefined) {
-        callbackFunc(err);
-      }
-      return false;
-    }
-    return results.$metadata.httpStatusCode === 200;
-  } catch (err) {
-    log.debug(err);
-    if (callbackFunc !== undefined) {
-      if (s3Config.s3Endpoint.contains(s3Config.s3BucketName)) {
-        const err2 = new AggregateError([
-          err,
-          new Error(
-            "Maybe you've included the bucket name inside the endpoint setting. Please remove the bucket name and try again."
-          ),
-        ]);
-        callbackFunc(err2);
-      } else {
-        callbackFunc(err);
-      }
-    }
+    try {
+        const results = await s3Client.send(
+            new HeadBucketCommand({Bucket: s3Config.s3BucketName})
+        );
+        if (
+            results === undefined ||
+            results.$metadata === undefined ||
+            results.$metadata.httpStatusCode === undefined
+        ) {
+            const err = "results or $metadata or httStatusCode is undefined";
+            log.debug(err);
+            if (callbackFunc !== undefined) {
+                callbackFunc(err);
+            }
+            return false;
+        }
+        return results.$metadata.httpStatusCode === 200;
+    } catch (err) {
+        log.debug(err);
+        if (callbackFunc !== undefined) {
+            if (s3Config.s3Endpoint.contains(s3Config.s3BucketName)) {
+                const err2 = new AggregateError([
+                    err,
+                    new Error(
+                        "Maybe you've included the bucket name inside the endpoint setting. Please remove the bucket name and try again."
+                    ),
+                ]);
+                callbackFunc(err2);
+            } else {
+                callbackFunc(err);
+            }
+        }
 
-    return false;
-  }
+        return false;
+    }
 };

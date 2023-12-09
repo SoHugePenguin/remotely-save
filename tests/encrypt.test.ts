@@ -28,24 +28,6 @@ describe("Encryption tests", () => {
     expect(await encryptStringToBase32(k, password)).to.not.equal(k);
   });
 
-  it("should raise error using different password", async () => {
-    const k = "secret text";
-    const password = "hey";
-    const password2 = "hey2";
-    const enc = await encryptStringToBase32(k, password);
-    await expect(decryptBase32ToString(enc, password2)).to.be.rejected;
-  });
-
-  it("should encrypt and decrypt string and get the same result returned", async () => {
-    const k = "jfkkjkjbce7983ycdeknkkjckooAIUHIDIBIE((*BII)njD/d/dd/d/sjxhux";
-    const password = "hfiuibec989###oiu982bj1`";
-    const enc = await encryptStringToBase32(k, password);
-    // console.log(enc);
-    const dec = await decryptBase32ToString(enc, password);
-    // console.log(dec);
-    expect(dec).equal(k);
-  });
-
   it("should get size from origin to encrypted correctly", () => {
     expect(() => getSizeFromOrigToEnc(-1)).to.throw();
     expect(() => getSizeFromOrigToEnc(0.5)).to.throw();

@@ -117,6 +117,9 @@ export interface UriParams {
 // 80 days
 export const OAUTH2_FORCE_EXPIRE_MILLISECONDS = 1000 * 60 * 60 * 24 * 80;
 
+type DecisionPass =
+  | "sameFileSize"
+
 type DecisionTypeForFile =
   | "skipUploading" // special, mtimeLocal === mtimeRemote
   | "uploadLocalDelHistToRemote" // "delLocalIfExists && delRemoteIfExists && cleanLocalDelHist && uploadLocalDelHistToRemote"
@@ -141,7 +144,8 @@ type DecisionTypeForFolder =
 export type DecisionType =
   | DecisionTypeForFile
   | DecisionTypeForFileSize
-  | DecisionTypeForFolder;
+  | DecisionTypeForFolder
+  | DecisionPass;
 
 export interface FileOrFolderMixedState {
   key: string;
