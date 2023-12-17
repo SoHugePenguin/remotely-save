@@ -1,13 +1,14 @@
 import localforage from "localforage";
+import {nanoid} from "nanoid";
+import {requireApiVersion, TAbstractFile, TFile, TFolder} from "obsidian";
+
+import {API_VER_STAT_FOLDER, SUPPORTED_SERVICES_TYPE} from "./baseTypes";
+import type {SyncPlanType} from "./sync";
+import {statFix, toText, unixTimeToStr} from "./misc";
+
+import {log} from "./moreOnLog";
+
 export type LocalForage = typeof localforage;
-import { nanoid } from "nanoid";
-import { requireApiVersion, TAbstractFile, TFile, TFolder } from "obsidian";
-
-import { API_VER_STAT_FOLDER, SUPPORTED_SERVICES_TYPE } from "./baseTypes";
-import type { SyncPlanType } from "./sync";
-import { statFix, toText, unixTimeToStr } from "./misc";
-
-import { log } from "./moreOnLog";
 
 const DB_VERSION_NUMBER_IN_HISTORY = [20211114, 20220108, 20220326];
 export const DEFAULT_DB_VERSION_NUMBER: number = 20220326;

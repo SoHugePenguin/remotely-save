@@ -200,7 +200,7 @@ export default class RemotelySavePlugin extends Plugin {
         })
       );
       this.syncStatus = "getting_remote_extra_meta";
-      const { remoteStates, metadataFile } = await parseRemoteItems(
+      const {remoteStates, metadataFile} = await parseRemoteItems(
         remoteRsp.Contents,
         this.db,
         this.vaultRandomID,
@@ -242,7 +242,7 @@ export default class RemotelySavePlugin extends Plugin {
         })
       );
       this.syncStatus = "generating_plan";
-      const { plan, sortedKeys, deletions, sizesGoWrong } = await getSyncPlan(
+      const {plan, sortedKeys, deletions, sizesGoWrong} = await getSyncPlan(
         remoteStates,
         local,
         localConfigDirContents,
@@ -431,7 +431,7 @@ export default class RemotelySavePlugin extends Plugin {
         const copied = cloneDeep(parsed.result);
         // new Notice(JSON.stringify(copied))
         this.settings = Object.assign({}, this.settings, copied);
-        this.saveSettings();
+        await this.saveSettings();
         new Notice(
           t("protocol_saveqr", {
             manifestName: this.manifest.name,
@@ -843,7 +843,6 @@ export default class RemotelySavePlugin extends Plugin {
   }
 
 
-
   getVaultBasePath() {
     if (this.app.vault.adapter instanceof FileSystemAdapter) {
       // in desktop
@@ -858,7 +857,7 @@ export default class RemotelySavePlugin extends Plugin {
     vaultBasePath: string,
     vaultRandomIDFromOldConfigFile: string
   ) {
-    const { db, vaultRandomID } = await prepareDBs(
+    const {db, vaultRandomID} = await prepareDBs(
       vaultBasePath,
       vaultRandomIDFromOldConfigFile
     );
@@ -889,9 +888,9 @@ export default class RemotelySavePlugin extends Plugin {
                 log.info(`schedule a run for ${scheduleTimeFromNow} milliseconds later`)
                 runScheduled = true
                 setTimeout(() => {
-                  this.syncRun("auto")
-                  runScheduled = false
-                },
+                    this.syncRun("auto")
+                    runScheduled = false
+                  },
                   scheduleTimeFromNow
                 )
               }

@@ -1,7 +1,6 @@
 import isEqual from "lodash/isEqual";
-import { base64url } from "rfc4648";
-import { reverseString } from "./misc";
-import { log } from "./moreOnLog";
+import {base64url} from "rfc4648";
+import {reverseString} from "./misc";
 
 const DEFAULT_README_FOR_METADATAONREMOTE =
   "Do NOT edit or delete the file manually. This file is for the plugin remotely-save to store some necessary meta data on the remote services. Its content is slightly obfuscated.";
@@ -29,8 +28,8 @@ export const isEqualMetadataOnRemote = (
   a: MetadataOnRemote,
   b: MetadataOnRemote
 ) => {
-  const m1 = a === undefined ? { deletions: [] } : a;
-  const m2 = b === undefined ? { deletions: [] } : b;
+  const m1 = a === undefined ? {deletions: []} : a;
+  const m2 = b === undefined ? {deletions: []} : b;
 
   // we only need to compare deletions
   const d1 = m1.deletions === undefined ? [] : m1.deletions;

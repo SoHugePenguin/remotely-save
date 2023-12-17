@@ -1,9 +1,9 @@
-import { Vault, moment } from "obsidian";
-import { base32, base64url } from "rfc4648";
+import {moment, Vault} from "obsidian";
+import {base32} from "rfc4648";
 import XRegExp from "xregexp";
 import emojiRegex from "emoji-regex";
 
-import { log } from "./moreOnLog";
+import {log} from "./moreOnLog";
 
 /**
  * If any part of the file starts with '.' or '_' then it's a hidden file.
@@ -324,6 +324,7 @@ export interface SplitRange {
   start: number;
   end: number; // exclusive
 }
+
 export const getSplitRanges = (bytesTotal: number, bytesEachPart: number) => {
   const res: SplitRange[] = [];
   if (bytesEachPart >= bytesTotal) {

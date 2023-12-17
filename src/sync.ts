@@ -1,4 +1,4 @@
-import {Notice, requireApiVersion, TAbstractFile, TFile, TFolder, Vault,} from "obsidian";
+import {requireApiVersion, TAbstractFile, TFile, TFolder, Vault,} from "obsidian";
 import AggregateError from "aggregate-error";
 import PQueue from "p-queue";
 import type {
@@ -30,6 +30,7 @@ import {
 import {isInsideObsFolder, ObsConfigDirFileType} from "./obsFolderLister";
 
 import {log} from "./moreOnLog";
+import {blockSize} from "./penguin";
 
 export type SyncStatusType =
   | "idle"
@@ -489,12 +490,9 @@ const assignOperationToFileInplace = (
   // 1. mtimeLocal
   if (r.existLocal) {
 
-    if (password !== "" && r.sizeLocal + Math.ceil(r.sizeLocal / (1024 * 1024)) * 16 + 28 == r.sizeRemoteEnc) {
-      console.log("仓库与本地字节数相同！文件大小：" + r.sizeLocal)
+    if (password !== "" && r.sizeLocal + Math.ceil(r.sizeLocal / (blockSize)) * 16 + 28 == r.sizeRemoteEnc) {
       r.decision = "sameFileSize"
       return r;
-    } else {
-      console.log("error:::", r.sizeLocal, r.sizeLocalEnc, r.sizeRemote, r.sizeRemoteEnc)
     }
 
     const mtimeRemote = r.existRemote ? r.mtimeRemote : -1;
@@ -1086,9 +1084,7 @@ const dispatchOperationToActual = async (
     }
     await clearDeleteRenameHistoryOfKeyAndVault(db, r.key, vaultRandomID);
   } else if (r.decision === "uploadLocalToRemote") {
-    if (client.serviceType === "onedrive" &&
-      r.sizeLocal === 0 &&
-      password === "") {
+    if (client.serviceType === "onedrive" && r.sizeLocal === 0 && password === "") {
     } else {
       const remoteObjMeta = await client.uploadToRemote(
         r.key,
@@ -1173,9 +1169,9 @@ const dispatchOperationToActual = async (
     // do nothing!
   } else if (r.decision === "skipUsingRemoteDelTooLarge") {
     // do nothing!
-  } else {
-    throw Error(`unknown decision in ${JSON.stringify(r)}`);
-  }
+  } else if (r.decision === "sameFileSize") {
+    // do nothing!
+  } else throw Error(`unknown decision in ${JSON.stringify(r)}`);
 };
 
 const splitThreeSteps = (syncPlan: SyncPlanType, sortedKeys: string[]) => {
@@ -1309,7 +1305,7 @@ export const doActualSync = async (
         localDeleteFunc,
         password
       );
-      new Notice(`finished ${key}`);
+      console.log(`finished ${key}`);
     }
 
     return; // shortcut return, avoid too many nests below

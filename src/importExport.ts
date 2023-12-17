@@ -1,13 +1,7 @@
 import QRCode from "qrcode";
 import cloneDeep from "lodash/cloneDeep";
 
-import {
-  COMMAND_URI,
-  UriParams,
-  RemotelySavePluginSettings,
-} from "./baseTypes";
-
-import { log } from "./moreOnLog";
+import {COMMAND_URI, RemotelySavePluginSettings, UriParams,} from "./baseTypes";
 
 export const exportQrCodeUri = async (
   settings: RemotelySavePluginSettings,

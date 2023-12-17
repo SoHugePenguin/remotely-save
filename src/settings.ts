@@ -1,16 +1,6 @@
+import type {TextComponent} from "obsidian";
+import {App, Modal, Notice, Platform, PluginSettingTab, setIcon, Setting,} from "obsidian";
 import {
-  App,
-  Modal,
-  Notice,
-  PluginSettingTab,
-  Setting,
-  Platform,
-  requireApiVersion,
-  setIcon,
-} from "obsidian";
-import type { TextComponent } from "obsidian";
-import {
-  API_VER_REQURL,
   DEFAULT_DEBUG_FOLDER,
   SUPPORTED_SERVICES_TYPE,
   SUPPORTED_SERVICES_TYPE_WITH_REMOTE_BASE_DIR,
@@ -18,45 +8,36 @@ import {
   WebdavAuthType,
   WebdavDepthType,
 } from "./baseTypes";
+import {exportVaultLoggerOutputToFiles, exportVaultSyncPlansToFiles,} from "./debugMode";
+import {exportQrCodeUri} from "./importExport";
 import {
-  exportVaultSyncPlansToFiles,
-  exportVaultLoggerOutputToFiles,
-} from "./debugMode";
-import { exportQrCodeUri } from "./importExport";
-import {
+  clearAllLoggerOutputRecords,
   clearAllSyncMetaMapping,
   clearAllSyncPlanRecords,
-  destroyDBs,
-  clearAllLoggerOutputRecords,
-  insertLoggerOutputByVault,
   clearExpiredLoggerOutputRecords,
+  destroyDBs,
+  insertLoggerOutputByVault,
 } from "./localdb";
 import type RemotelySavePlugin from "./main"; // unavoidable
-import { RemoteClient } from "./remote";
+import {RemoteClient} from "./remote";
 import {
   DEFAULT_DROPBOX_CONFIG,
   getAuthUrlAndVerifier as getAuthUrlAndVerifierDropbox,
   sendAuthReq as sendAuthReqDropbox,
   setConfigBySuccessfullAuthInplace,
 } from "./remoteForDropbox";
-import {
-  DEFAULT_ONEDRIVE_CONFIG,
-  getAuthUrlAndVerifier as getAuthUrlAndVerifierOnedrive,
-} from "./remoteForOnedrive";
-import { messyConfigToNormal } from "./configPersist";
-import type { TransItemType } from "./i18n";
-import { checkHasSpecialCharForDir } from "./misc";
-import { applyWebdavPresetRulesInplace } from "./presetRules";
+import {DEFAULT_ONEDRIVE_CONFIG, getAuthUrlAndVerifier as getAuthUrlAndVerifierOnedrive,} from "./remoteForOnedrive";
+import {messyConfigToNormal} from "./configPersist";
+import type {TransItemType} from "./i18n";
+import {checkHasSpecialCharForDir} from "./misc";
+import {applyWebdavPresetRulesInplace} from "./presetRules";
 
-import {
-  applyLogWriterInplace,
-  log,
-  restoreLogWritterInplace,
-} from "./moreOnLog";
+import {applyLogWriterInplace, log, restoreLogWritterInplace,} from "./moreOnLog";
 
 class PasswordModal extends Modal {
   plugin: RemotelySavePlugin;
   newPassword: string;
+
   constructor(app: App, plugin: RemotelySavePlugin, newPassword: string) {
     super(app);
     this.plugin = plugin;
@@ -64,14 +45,14 @@ class PasswordModal extends Modal {
   }
 
   onOpen() {
-    let { contentEl } = this;
+    let {contentEl} = this;
 
     const t = (x: TransItemType, vars?: any) => {
       return this.plugin.i18n.t(x, vars);
     };
 
     // contentEl.setText("Add Or change password.");
-    contentEl.createEl("h2", { text: t("modal_password_title") });
+    contentEl.createEl("h2", {text: t("modal_password_title")});
     t("modal_password_shortdesc")
       .split("\n")
       .forEach((val, idx) => {
@@ -119,7 +100,7 @@ class PasswordModal extends Modal {
   }
 
   onClose() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     contentEl.empty();
   }
 }
@@ -128,6 +109,7 @@ class ChangeRemoteBaseDirModal extends Modal {
   readonly plugin: RemotelySavePlugin;
   readonly newRemoteBaseDir: string;
   readonly service: SUPPORTED_SERVICES_TYPE_WITH_REMOTE_BASE_DIR;
+
   constructor(
     app: App,
     plugin: RemotelySavePlugin,
@@ -141,13 +123,13 @@ class ChangeRemoteBaseDirModal extends Modal {
   }
 
   onOpen() {
-    let { contentEl } = this;
+    let {contentEl} = this;
 
     const t = (x: TransItemType, vars?: any) => {
       return this.plugin.i18n.t(x, vars);
     };
 
-    contentEl.createEl("h2", { text: t("modal_remotebasedir_title") });
+    contentEl.createEl("h2", {text: t("modal_remotebasedir_title")});
     t("modal_remotebasedir_shortdesc")
       .split("\n")
       .forEach((val, idx) => {
@@ -213,7 +195,7 @@ class ChangeRemoteBaseDirModal extends Modal {
   }
 
   onClose() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     contentEl.empty();
   }
 }
@@ -223,6 +205,7 @@ class DropboxAuthModal extends Modal {
   readonly authDiv: HTMLDivElement;
   readonly revokeAuthDiv: HTMLDivElement;
   readonly revokeAuthSetting: Setting;
+
   constructor(
     app: App,
     plugin: RemotelySavePlugin,
@@ -238,7 +221,7 @@ class DropboxAuthModal extends Modal {
   }
 
   async onOpen() {
-    let { contentEl } = this;
+    let {contentEl} = this;
 
     const t = (x: TransItemType, vars?: any) => {
       return this.plugin.i18n.t(x, vars);
@@ -261,7 +244,7 @@ class DropboxAuthModal extends Modal {
       needManualPatse = true;
     }
 
-    const { authUrl, verifier } = await getAuthUrlAndVerifierDropbox(
+    const {authUrl, verifier} = await getAuthUrlAndVerifierDropbox(
       this.plugin.settings.dropbox.clientID,
       needManualPatse
     );
@@ -375,7 +358,7 @@ class DropboxAuthModal extends Modal {
   }
 
   onClose() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     contentEl.empty();
   }
 }
@@ -385,6 +368,7 @@ export class OnedriveAuthModal extends Modal {
   readonly authDiv: HTMLDivElement;
   readonly revokeAuthDiv: HTMLDivElement;
   readonly revokeAuthSetting: Setting;
+
   constructor(
     app: App,
     plugin: RemotelySavePlugin,
@@ -400,9 +384,9 @@ export class OnedriveAuthModal extends Modal {
   }
 
   async onOpen() {
-    let { contentEl } = this;
+    let {contentEl} = this;
 
-    const { authUrl, verifier } = await getAuthUrlAndVerifierOnedrive(
+    const {authUrl, verifier} = await getAuthUrlAndVerifierOnedrive(
       this.plugin.settings.onedrive.clientID,
       this.plugin.settings.onedrive.authority
     );
@@ -440,7 +424,7 @@ export class OnedriveAuthModal extends Modal {
   }
 
   onClose() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     contentEl.empty();
   }
 }
@@ -449,6 +433,7 @@ export class OnedriveRevokeAuthModal extends Modal {
   readonly plugin: RemotelySavePlugin;
   readonly authDiv: HTMLDivElement;
   readonly revokeAuthDiv: HTMLDivElement;
+
   constructor(
     app: App,
     plugin: RemotelySavePlugin,
@@ -462,7 +447,7 @@ export class OnedriveRevokeAuthModal extends Modal {
   }
 
   async onOpen() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     const t = (x: TransItemType, vars?: any) => {
       return this.plugin.i18n.t(x, vars);
     };
@@ -510,7 +495,7 @@ export class OnedriveRevokeAuthModal extends Modal {
   }
 
   onClose() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     contentEl.empty();
   }
 }
@@ -518,6 +503,7 @@ export class OnedriveRevokeAuthModal extends Modal {
 class SyncConfigDirModal extends Modal {
   plugin: RemotelySavePlugin;
   saveDropdownFunc: () => void;
+
   constructor(
     app: App,
     plugin: RemotelySavePlugin,
@@ -529,7 +515,7 @@ class SyncConfigDirModal extends Modal {
   }
 
   async onOpen() {
-    let { contentEl } = this;
+    let {contentEl} = this;
 
     const t = (x: TransItemType, vars?: any) => {
       return this.plugin.i18n.t(x, vars);
@@ -563,26 +549,27 @@ class SyncConfigDirModal extends Modal {
   }
 
   onClose() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     contentEl.empty();
   }
 }
 
 class ExportSettingsQrCodeModal extends Modal {
   plugin: RemotelySavePlugin;
+
   constructor(app: App, plugin: RemotelySavePlugin) {
     super(app);
     this.plugin = plugin;
   }
 
   async onOpen() {
-    let { contentEl } = this;
+    let {contentEl} = this;
 
     const t = (x: TransItemType, vars?: any) => {
       return this.plugin.i18n.t(x, vars);
     };
 
-    const { rawUri, imgUri } = await exportQrCodeUri(
+    const {rawUri, imgUri} = await exportQrCodeUri(
       this.plugin.settings,
       this.app.vault.getName(),
       this.plugin.manifest.version
@@ -624,7 +611,7 @@ class ExportSettingsQrCodeModal extends Modal {
   }
 
   onClose() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     contentEl.empty();
   }
 }
@@ -656,7 +643,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
   }
 
   display(): void {
-    let { containerEl } = this;
+    let {containerEl} = this;
 
     containerEl.empty();
 
@@ -670,17 +657,17 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
 
     // we need to create the div in advance of any other service divs
     const serviceChooserDiv = containerEl.createDiv();
-    serviceChooserDiv.createEl("h2", { text: t("settings_chooseservice") });
+    serviceChooserDiv.createEl("h2", {text: t("settings_chooseservice")});
 
     //////////////////////////////////////////////////
     // below for s3
     //////////////////////////////////////////////////
 
-    const s3Div = containerEl.createEl("div", { cls: "s3-hide" });
+    const s3Div = containerEl.createEl("div", {cls: "s3-hide"});
     s3Div.toggleClass("s3-hide", this.plugin.settings.serviceType !== "s3");
-    s3Div.createEl("h2", { text: t("settings_s3") });
+    s3Div.createEl("h2", {text: t("settings_s3")});
 
-    const s3LongDescDiv = s3Div.createEl("div", { cls: "settings-long-desc" });
+    const s3LongDescDiv = s3Div.createEl("div", {cls: "settings-long-desc"});
 
     for (const c of [
       t("settings_s3_disclaimer1"),
@@ -863,7 +850,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
         button.onClick(async () => {
           new Notice(t("settings_checkonnectivity_checking"));
           const client = new RemoteClient("s3", this.plugin.settings.s3);
-          const errors = { msg: "" };
+          const errors = {msg: ""};
           const res = await client.checkConnectivity((err: any) => {
             errors.msg = err;
           });
@@ -880,12 +867,12 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
     // below for dropbpx
     //////////////////////////////////////////////////
 
-    const dropboxDiv = containerEl.createEl("div", { cls: "dropbox-hide" });
+    const dropboxDiv = containerEl.createEl("div", {cls: "dropbox-hide"});
     dropboxDiv.toggleClass(
       "dropbox-hide",
       this.plugin.settings.serviceType !== "dropbox"
     );
-    dropboxDiv.createEl("h2", { text: t("settings_dropbox") });
+    dropboxDiv.createEl("h2", {text: t("settings_dropbox")});
 
     const dropboxLongDescDiv = dropboxDiv.createEl("div", {
       cls: "settings-long-desc",
@@ -1053,7 +1040,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
             () => self.plugin.saveSettings()
           );
 
-          const errors = { msg: "" };
+          const errors = {msg: ""};
           const res = await client.checkConnectivity((err: any) => {
             errors.msg = `${err}`;
           });
@@ -1070,12 +1057,12 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
     // below for onedrive
     //////////////////////////////////////////////////
 
-    const onedriveDiv = containerEl.createEl("div", { cls: "onedrive-hide" });
+    const onedriveDiv = containerEl.createEl("div", {cls: "onedrive-hide"});
     onedriveDiv.toggleClass(
       "onedrive-hide",
       this.plugin.settings.serviceType !== "onedrive"
     );
-    onedriveDiv.createEl("h2", { text: t("settings_onedrive") });
+    onedriveDiv.createEl("h2", {text: t("settings_onedrive")});
     const onedriveLongDescDiv = onedriveDiv.createEl("div", {
       cls: "settings-long-desc",
     });
@@ -1202,7 +1189,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
             () => self.plugin.saveSettings()
           );
 
-          const errors = { msg: "" };
+          const errors = {msg: ""};
           const res = await client.checkConnectivity((err: any) => {
             errors.msg = `${err}`;
           });
@@ -1219,13 +1206,13 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
     // below for webdav
     //////////////////////////////////////////////////
 
-    const webdavDiv = containerEl.createEl("div", { cls: "webdav-hide" });
+    const webdavDiv = containerEl.createEl("div", {cls: "webdav-hide"});
     webdavDiv.toggleClass(
       "webdav-hide",
       this.plugin.settings.serviceType !== "webdav"
     );
 
-    webdavDiv.createEl("h2", { text: t("settings_webdav") });
+    webdavDiv.createEl("h2", {text: t("settings_webdav")});
 
     const webdavLongDescDiv = webdavDiv.createEl("div", {
       cls: "settings-long-desc",
@@ -1423,7 +1410,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
             this.app.vault.getName(),
             () => self.plugin.saveSettings()
           );
-          const errors = { msg: "" };
+          const errors = {msg: ""};
           const res = await client.checkConnectivity((err: any) => {
             errors.msg = `${err}`;
           });
@@ -1483,7 +1470,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
     //////////////////////////////////////////////////
 
     const basicDiv = containerEl.createEl("div");
-    basicDiv.createEl("h2", { text: t("settings_basic") });
+    basicDiv.createEl("h2", {text: t("settings_basic")});
 
     let newPassword = `${this.plugin.settings.password}`;
     new Setting(basicDiv)
@@ -1547,9 +1534,9 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
                       const scheduleTimeFromNow = this.plugin.settings.syncOnSaveAfterMilliseconds - (currentTime - lastModified)
                       runScheduled = true
                       setTimeout(() => {
-                        this.plugin.syncRun("auto")
-                        runScheduled = false
-                      },
+                          this.plugin.syncRun("auto")
+                          runScheduled = false
+                        },
                         scheduleTimeFromNow
                       )
                     }
@@ -1750,7 +1737,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
     //////////////////////////////////////////////////
 
     const debugDiv = containerEl.createEl("div");
-    debugDiv.createEl("h2", { text: t("settings_debug") });
+    debugDiv.createEl("h2", {text: t("settings_debug")});
 
     new Setting(debugDiv)
       .setName(t(<"confirm" | "disable" | "enable" | "goback" | "submit" | "sometext" | "syncrun_status_preparing" | "syncrun_status_progress" | "syncrun_alreadyrunning" | "syncrun_syncingribbon" | "syncrun_step0" | "syncrun_step1" | "syncrun_step2" | "syncrun_step3" | "syncrun_passworderr" | "syncrun_step4" | "syncrun_step5" | "syncrun_step6" | "syncrun_step7" | "syncrun_step7skip" | "syncrun_step8" | "syncrun_abort" | "protocol_saveqr" | "protocol_callbacknotsupported" | "protocol_dropbox_connecting" | "protocol_dropbox_connect_succ" | "protocol_dropbox_connect_succ_revoke" | "protocol_dropbox_connect_fail" | "protocol_dropbox_connect_unknown" | "protocol_onedrive_connecting" | "protocol_onedrive_connect_succ_revoke" | "protocol_onedrive_connect_fail" | "protocol_onedrive_connect_unknown" | "command_startsync" | "command_drynrun" | "command_exportsyncplans_json" | "command_exportsyncplans_table" | "command_exportlogsindb" | "modal_password_title" | "modal_password_shortdesc" | "modal_password_attn1" | "modal_password_attn2" | "modal_password_attn3" | "modal_password_attn4" | "modal_password_attn5" | "modal_password_secondconfirm" | "modal_password_notice" | "modal_remotebasedir_title" | "modal_remotebasedir_shortdesc" | "modal_remotebasedir_invaliddirhint" | "modal_remotebasedir_secondconfirm_vaultname" | "modal_remotebasedir_secondconfirm_change" | "modal_remotebasedir_notice" | "modal_dropboxauth_manualsteps" | "modal_dropboxauth_autosteps" | "modal_dropboxauth_copybutton" | "modal_dropboxauth_copynotice" | "modal_dropboxauth_maualinput" | "modal_dropboxauth_maualinput_desc" | "modal_dropboxauth_maualinput_notice" | "modal_dropboxauth_maualinput_conn_succ" | "modal_dropboxauth_maualinput_conn_succ_revoke" | "modal_dropboxauth_maualinput_conn_fail" | "modal_onedriveauth_shortdesc" | "modal_onedriveauth_copybutton" | "modal_onedriveauth_copynotice" | "modal_onedriverevokeauth_step1" | "modal_onedriverevokeauth_step2" | "modal_onedriverevokeauth_clean" | "modal_onedriverevokeauth_clean_desc" | "modal_onedriverevokeauth_clean_button" | "modal_onedriverevokeauth_clean_notice" | "modal_onedriverevokeauth_clean_fail" | "modal_syncconfig_attn" | "modal_syncconfig_secondconfirm" | "modal_syncconfig_notice" | "modal_qr_shortdesc" | "modal_qr_button" | "modal_qr_button_notice" | "modal_sizesconflict_title" | "modal_sizesconflict_desc" | "modal_sizesconflict_copybutton" | "modal_sizesconflict_copynotice" | "settings_basic" | "settings_password" | "settings_password_desc" | "settings_autorun" | "settings_autorun_desc" | "settings_autorun_notset" | "settings_autorun_second" | "settings_autorun_1min" | "settings_autorun_5min" | "settings_autorun_10min" | "settings_autorun_30min" | "settings_saverun" | "settings_saverun_desc" | "settings_saverun_notset" | "settings_saverun_1sec" | "settings_saverun_5sec" | "settings_saverun_10sec" | "settings_saverun_1min" | "settings_runoncestartup" | "settings_runoncestartup_desc" | "settings_runoncestartup_notset" | "settings_runoncestartup_1sec" | "settings_runoncestartup_10sec" | "settings_runoncestartup_30sec" | "settings_skiplargefiles" | "settings_skiplargefiles_desc" | "settings_skiplargefiles_notset" | "settings_checkonnectivity" | "settings_checkonnectivity_desc" | "settings_checkonnectivity_button" | "settings_checkonnectivity_checking" | "settings_remotebasedir" | "settings_remotebasedir_desc" | "settings_s3" | "settings_s3_disclaimer1" | "settings_s3_disclaimer2" | "settings_s3_cors" | "settings_s3_prod" | "settings_s3_prod1" | "settings_s3_prod2" | "settings_s3_prod3" | "settings_s3_endpoint" | "settings_s3_region" | "settings_s3_region_desc" | "settings_s3_accesskeyid" | "settings_s3_accesskeyid_desc" | "settings_s3_secretaccesskey" | "settings_s3_secretaccesskey_desc" | "settings_s3_bucketname" | "settings_s3_bypasscorslocally" | "settings_s3_bypasscorslocally_desc" | "settings_s3_parts" | "settings_s3_parts_desc" | "settings_s3_urlstyle" | "settings_s3_urlstyle_desc" | "settings_s3_connect_succ" | "settings_s3_connect_fail" | "settings_dropbox" | "settings_dropbox_disclaimer1" | "settings_dropbox_disclaimer2" | "settings_dropbox_folder" | "settings_dropbox_revoke" | "settings_dropbox_revoke_desc" | "settings_dropbox_revoke_button" | "settings_dropbox_revoke_notice" | "settings_dropbox_revoke_noticeerr" | "settings_dropbox_clearlocal" | "settings_dropbox_clearlocal_desc" | "settings_dropbox_clearlocal_button" | "settings_dropbox_clearlocal_notice" | "settings_dropbox_auth" | "settings_dropbox_auth_desc" | "settings_dropbox_auth_button" | "settings_dropbox_connect_succ" | "settings_dropbox_connect_fail" | "settings_onedrive" | "settings_onedrive_disclaimer1" | "settings_onedrive_disclaimer2" | "settings_onedrive_folder" | "settings_onedrive_nobiz" | "settings_onedrive_revoke" | "settings_onedrive_revoke_desc" | "settings_onedrive_revoke_button" | "settings_onedrive_auth" | "settings_onedrive_auth_desc" | "settings_onedrive_auth_button" | "settings_onedrive_connect_succ" | "settings_onedrive_connect_fail" | "settings_webdav" | "settings_webdav_disclaimer1" | "settings_webdav_cors_os" | "settings_webdav_cors" | "settings_webdav_folder" | "settings_webdav_addr" | "settings_webdav_addr_desc" | "settings_webdav_user" | "settings_webdav_user_desc" | "settings_webdav_password" | "settings_webdav_password_desc" | "settings_webdav_auth" | "settings_webdav_auth_desc" | "settings_webdav_depth" | "settings_webdav_depth_desc" | "settings_webdav_depth_auto" | "settings_webdav_depth_1" | "settings_webdav_depth_inf" | "settings_webdav_connect_succ" | "settings_webdav_connect_fail" | "settings_webdav_connect_fail_withcors" | "settings_chooseservice" | "settings_chooseservice_desc" | "settings_chooseservice_s3" | "settings_chooseservice_dropbox" | "settings_chooseservice_webdav" | "settings_chooseservice_onedrive" | "settings_adv" | "settings_concurrency" | "settings_concurrency_desc" | "settings_syncunderscore" | "settings_syncunderscore_desc" | "settings_configdir" | "settings_configdir_desc" | "settings_importexport" | "settings_export" | "settings_export_desc" | "settings_export_desc_button" | "settings_import" | "settings_import_desc" | "settings_debug" | "settings_debug_enabled" | "settings_debug_enabled_desc" | "settings_outputsettingsconsole" | "settings_outputsettingsconsole_desc" | "settings_outputsettingsconsole_button" | "settings_outputsettingsconsole_notice" | "settings_syncplans" | "settings_syncplans_desc" | "settings_syncplans_button_json" | "settings_syncplans_button_table" | "settings_syncplans_notice" | "settings_delsyncplans" | "settings_delsyncplans_desc" | "settings_delsyncplans_button" | "settings_delsyncplans_notice" | "settings_logtodb" | "settings_logtodb_desc" | "settings_logtodbexport" | "settings_logtodbexport_desc" | "settings_logtodbexport_button" | "settings_logtodbexport_notice" | "settings_logtodbclear" | "settings_logtodbclear_desc" | "settings_logtodbclear_button" | "settings_logtodbclear_notice" | "settings_delsyncmap" | "settings_delsyncmap_desc" | "settings_delsyncmap_button" | "settings_delsyncmap_notice" | "settings_outputbasepathvaultid" | "settings_outputbasepathvaultid_desc" | "settings_outputbasepathvaultid_button" | "settings_resetcache" | "settings_resetcache_desc" | "settings_resetcache_button" | "settings_resetcache_notice" | "settings_enablestatusbar_info" | "settings_enablestatusbar_info_desc" | "settings_enablestatusbar_reloadrequired_notice" | "settings_trash_locally" | "settings_trash_locally_desc" | "settings_sync_trash" | "settings_sync_trash_desc" | "statusbar_time_years" | "statusbar_time_months" | "statusbar_time_weeks" | "statusbar_time_days" | "statusbar_time_hours" | "statusbar_time_minutes" | "statusbar_time_lessminute" | "statusbar_lastsync" | "statusbar_lastsync_label" | "statusbar_lastsync_never" | "statusbar_lastsync_never_label" | "syncalgov2_title" | "syncalgov2_texts" | "syncalgov2_button_agree" | "syncalgov2_button_disagree">"settings_debuglevel"))
@@ -1908,7 +1895,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
   }
 
   hide() {
-    let { containerEl } = this;
+    let {containerEl} = this;
     containerEl.empty();
     super.hide();
   }

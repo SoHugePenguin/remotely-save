@@ -1,12 +1,9 @@
-import { TAbstractFile, TFolder, TFile, Vault } from "obsidian";
+import {Vault} from "obsidian";
 
-import type { SyncPlanType } from "./sync";
-import {
-  readAllSyncPlanRecordTextsByVault,
-  readAllLogRecordTextsByVault,
-} from "./localdb";
-import type { InternalDBs } from "./localdb";
-import { mkdirpInVault } from "./misc";
+import type {SyncPlanType} from "./sync";
+import type {InternalDBs} from "./localdb";
+import {readAllLogRecordTextsByVault, readAllSyncPlanRecordTextsByVault,} from "./localdb";
+import {mkdirpInVault} from "./misc";
 import {
   DEFAULT_DEBUG_FOLDER,
   DEFAULT_LOG_HISTORY_FILE_PREFIX,
@@ -14,11 +11,9 @@ import {
   FileOrFolderMixedState,
 } from "./baseTypes";
 
-import { log } from "./moreOnLog";
-
 const turnSyncPlanToTable = (record: string) => {
   const syncPlan: SyncPlanType = JSON.parse(record);
-  const { ts, tsFmt, remoteType, mixedStates } = syncPlan;
+  const {ts, tsFmt, remoteType, mixedStates} = syncPlan;
 
   type allowedHeadersType = keyof FileOrFolderMixedState;
   const headers: allowedHeadersType[] = [

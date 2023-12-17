@@ -1,29 +1,19 @@
-import { CryptoProvider, PublicClientApplication } from "@azure/msal-node";
-import { AuthenticationProvider } from "@microsoft/microsoft-graph-client";
-import type {
-  DriveItem,
-  UploadSession,
-  User,
-} from "@microsoft/microsoft-graph-types";
+import {CryptoProvider, PublicClientApplication} from "@azure/msal-node";
+import {AuthenticationProvider} from "@microsoft/microsoft-graph-client";
+import type {DriveItem, UploadSession, User,} from "@microsoft/microsoft-graph-types";
 import cloneDeep from "lodash/cloneDeep";
-import { request, requestUrl, RequestUrlParam, requireApiVersion, Vault } from "obsidian";
+import {requestUrl, RequestUrlParam, Vault} from "obsidian";
 import {
-  VALID_REQURL,
   COMMAND_CALLBACK_ONEDRIVE,
   DEFAULT_CONTENT_TYPE,
   OAUTH2_FORCE_EXPIRE_MILLISECONDS,
   OnedriveConfig,
   RemoteItem,
 } from "./baseTypes";
-import { decryptArrayBuffer, encryptArrayBuffer } from "./encrypt";
-import {
-  bufferToArrayBuffer,
-  getRandomArrayBuffer,
-  getRandomIntInclusive,
-  mkdirpInVault,
-} from "./misc";
+import {decryptArrayBuffer, encryptArrayBuffer} from "./encrypt";
+import {bufferToArrayBuffer, getRandomArrayBuffer, getRandomIntInclusive, mkdirpInVault,} from "./misc";
 
-import { log } from "./moreOnLog";
+import {log} from "./moreOnLog";
 
 const SCOPES = ["User.Read", "Files.ReadWrite.AppFolder", "offline_access"];
 const REDIRECT_URI = `obsidian://${COMMAND_CALLBACK_ONEDRIVE}`;
@@ -49,7 +39,7 @@ export async function getAuthUrlAndVerifier(
   authority: string
 ) {
   const cryptoProvider = new CryptoProvider();
-  const { verifier, challenge } = await cryptoProvider.generatePkceCodes();
+  const {verifier, challenge} = await cryptoProvider.generatePkceCodes();
 
   const pkceCodes = {
     challengeMethod: "S256", // Use SHA256 Algorithm
@@ -92,6 +82,7 @@ export interface AccessCodeResponseSuccessfulType {
   refresh_token?: string;
   id_token?: string;
 }
+
 export interface AccessCodeResponseFailedType {
   error: string;
   error_description: string;
@@ -142,14 +133,14 @@ export const sendRefreshTokenReq = async (
     refresh_token: refreshToken,
     grant_type: "refresh_token",
   }).toString();
-  
+
   const requestParams: RequestUrlParam = {
     url: `${authority}/oauth2/v2.0/token`,
     method: "POST",
     contentType: "application/x-www-form-urlencoded",
     body: body,
   };
-  
+
   const rsp = await requestUrl(requestParams).json;
 
   if (rsp.error !== undefined) {
@@ -302,6 +293,7 @@ const fromDriveItemToRemoteItem = (
 class MyAuthProvider implements AuthenticationProvider {
   onedriveConfig: OnedriveConfig;
   saveUpdatedConfigFunc: () => Promise<any>;
+
   constructor(
     onedriveConfig: OnedriveConfig,
     saveUpdatedConfigFunc: () => Promise<any>
@@ -309,6 +301,7 @@ class MyAuthProvider implements AuthenticationProvider {
     this.onedriveConfig = onedriveConfig;
     this.saveUpdatedConfigFunc = saveUpdatedConfigFunc;
   }
+
   getAccessToken = async () => {
     if (
       this.onedriveConfig.accessToken === "" ||
@@ -351,6 +344,7 @@ export class WrappedOnedriveClient {
   vaultFolderExists: boolean;
   authGetter: MyAuthProvider;
   saveUpdatedConfigFunc: () => Promise<any>;
+
   constructor(
     onedriveConfig: OnedriveConfig,
     remoteBaseDir: string,
@@ -750,7 +744,7 @@ const downloadFromRemoteRaw = async (
   const content = (
     await requestUrl({
       url: downloadUrl,
-      headers: { "Cache-Control": "no-cache" },
+      headers: {"Cache-Control": "no-cache"},
     })
   ).arrayBuffer;
   return content;

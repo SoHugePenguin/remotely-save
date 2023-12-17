@@ -1,8 +1,4 @@
-import type {
-  RemotelySavePluginSettings,
-  WebdavConfig,
-  WebdavDepthType,
-} from "./baseTypes";
+import type {RemotelySavePluginSettings, WebdavConfig, WebdavDepthType,} from "./baseTypes";
 
 const RULES = {
   webdav: {
@@ -30,7 +26,7 @@ export const applyWebdavPresetRulesInplace = (
       webdav: webdav,
     };
   }
-  for (const { url, depth, manualRecursive } of RULES.webdav.depth) {
+  for (const {url, depth, manualRecursive} of RULES.webdav.depth) {
     if (
       webdav.address !== undefined &&
       new RegExp(url).test(webdav.address) &&

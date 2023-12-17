@@ -1,17 +1,9 @@
-import { Vault } from "obsidian";
-import type {
-  DropboxConfig,
-  OnedriveConfig,
-  S3Config,
-  SUPPORTED_SERVICES_TYPE,
-  WebdavConfig,
-} from "./baseTypes";
+import {Vault} from "obsidian";
+import type {DropboxConfig, OnedriveConfig, S3Config, SUPPORTED_SERVICES_TYPE, WebdavConfig,} from "./baseTypes";
 import * as dropbox from "./remoteForDropbox";
 import * as onedrive from "./remoteForOnedrive";
 import * as s3 from "./remoteForS3";
 import * as webdav from "./remoteForWebdav";
-
-import { log } from "./moreOnLog";
 
 export class RemoteClient {
   readonly serviceType: SUPPORTED_SERVICES_TYPE;

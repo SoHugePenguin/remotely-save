@@ -1,19 +1,19 @@
-import { App, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
+import {App, Modal, Setting} from "obsidian";
 import type RemotelySavePlugin from "./main"; // unavoidable
-import type { TransItemType } from "./i18n";
-
-import { log } from "./moreOnLog";
+import type {TransItemType} from "./i18n";
 
 export class SyncAlgoV2Modal extends Modal {
   agree: boolean;
   readonly plugin: RemotelySavePlugin;
+
   constructor(app: App, plugin: RemotelySavePlugin) {
     super(app);
     this.plugin = plugin;
     this.agree = false;
   }
+
   onOpen() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     const t = (x: TransItemType, vars?: any) => {
       return this.plugin.i18n.t(x, vars);
     };
@@ -48,7 +48,7 @@ export class SyncAlgoV2Modal extends Modal {
   }
 
   onClose() {
-    let { contentEl } = this;
+    let {contentEl} = this;
     contentEl.empty();
     if (this.agree) {
       this.plugin.saveAgreeToUseNewSyncAlgorithm();

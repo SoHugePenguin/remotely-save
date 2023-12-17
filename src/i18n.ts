@@ -1,7 +1,7 @@
 import Mustache from "mustache";
-import { moment } from "obsidian";
+import {moment} from "obsidian";
 
-import { LANGS } from "./langs";
+import {LANGS} from "./langs";
 
 export type LangType = keyof typeof LANGS;
 export type LangTypeAndAuto = LangType | "auto";
@@ -10,6 +10,7 @@ export type TransItemType = keyof typeof LANGS["en"];
 export class I18n {
   lang: LangTypeAndAuto;
   readonly saveSettingFunc: (tolang: LangTypeAndAuto) => Promise<void>;
+
   constructor(
     lang: LangTypeAndAuto,
     saveSettingFunc: (tolang: LangTypeAndAuto) => Promise<void>
@@ -17,6 +18,7 @@ export class I18n {
     this.lang = lang;
     this.saveSettingFunc = saveSettingFunc;
   }
+
   async changeTo(anotherLang: LangTypeAndAuto) {
     this.lang = anotherLang;
     await this.saveSettingFunc(anotherLang);

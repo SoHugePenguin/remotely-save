@@ -1,10 +1,9 @@
 // It's very dangerous for this file to depend on other files in the same project.
 // We should avoid this situation as much as possible.
 
-import { TAbstractFile, TFolder, TFile, Vault } from "obsidian";
-
+import type {LogLevelNumbers} from "loglevel";
 import * as origLog from "loglevel";
-import type { LogLevelNumbers, Logger, LogLevel, LogLevelDesc } from "loglevel";
+
 const log2 = origLog.getLogger("rs-default");
 
 const originalFactory = log2.methodFactory;

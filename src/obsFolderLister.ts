@@ -1,8 +1,8 @@
-import { Vault, Stat, ListedFiles } from "obsidian";
-import { Queue } from "@fyears/tsqueue";
+import {ListedFiles, Vault} from "obsidian";
+import {Queue} from "@fyears/tsqueue";
 import chunk from "lodash/chunk";
 import flatten from "lodash/flatten";
-import { statFix } from "./misc";
+import {statFix} from "./misc";
 
 export interface ObsConfigDirFileType {
   key: string;
