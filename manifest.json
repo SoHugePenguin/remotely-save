@@ -1,10 +1,10 @@
 {
-  "id": "remotely-secure",
+  "id": "remotely-sync (fix webdav)",
   "name": "Remotely Secure",
-  "version": "0.4.1",
+  "version": "1.0.0",
   "minAppVersion": "1.4.11",
-  "description": "Security fixes for the remotely-save unofficial plugin allowing users to synchronize notes between local device and the cloud service. Not backwards compatible.",
-  "author": "sboesen",
-  "authorUrl": "https://github.com/sboesen",
+  "description": "Fixed a large number of vulnerabilities in synchronization, such as large file transfer stuck, duplicate transfer of the same file, verification vulnerabilities. This fix is only for webdav, because my project is based on webdav.",
+  "author": "SoHugePenguin",
+  "authorUrl": "https://github.com/SoHugePenguin",
   "isDesktopOnly": false
 }
