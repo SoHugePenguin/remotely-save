@@ -17,7 +17,7 @@ import {
   upsertSyncMetaMappingDataByVault,
 } from "./localdb";
 import {atWhichLevel, getParentFolder, isHiddenPath, isVaildText, mkdirpInVault, statFix, unixTimeToStr,} from "./misc";
-import {RemoteClient} from "./remote";
+import {RemoteClient} from "./remote/remote";
 import {
   DEFAULT_FILE_NAME_FOR_METADATAONREMOTE,
   DEFAULT_FILE_NAME_FOR_METADATAONREMOTE2,
@@ -30,7 +30,6 @@ import {
 import {isInsideObsFolder, ObsConfigDirFileType} from "./obsFolderLister";
 
 import {log} from "./moreOnLog";
-import {blockSize} from "./penguin";
 
 export type SyncStatusType =
   | "idle"
@@ -87,7 +86,6 @@ export const isPasswordOk = async (
   }
   try {
     const res = await decryptBase64urlToString(santyCheckKey, password);
-
     // additional test
     // because iOS Safari bypasses decryption with wrong password!
     if (isVaildText(res)) {
@@ -102,7 +100,6 @@ export const isPasswordOk = async (
       } as PasswordCheckType;
     }
   } catch (error) {
-    console.log(error, '????????????????????')
     return {
       ok: false,
       reason: "password_not_matched",
@@ -489,11 +486,8 @@ const assignOperationToFileInplace = (
 
   // 1. mtimeLocal
   if (r.existLocal) {
+    // TODO penguin sync  md5
 
-    if (password !== "" && r.sizeLocal + Math.ceil(r.sizeLocal / (blockSize)) * 16 + 28 == r.sizeRemoteEnc) {
-      r.decision = "sameFileSize"
-      return r;
-    }
 
     const mtimeRemote = r.existRemote ? r.mtimeRemote : -1;
     const deltimeRemote = r.deltimeRemote !== undefined ? r.deltimeRemote : -1;
@@ -1010,7 +1004,6 @@ const uploadExtraMeta = async (
       remoteEncryptedKey = metadataFile.remoteEncryptedKey;
     }
     if (remoteEncryptedKey === undefined || remoteEncryptedKey === "") {
-      // remoteEncryptedKey = await encryptStringToBase32(key, password);
       remoteEncryptedKey = await encryptStringToBase64url(key, password);
     }
   }
@@ -1169,8 +1162,6 @@ const dispatchOperationToActual = async (
     // do nothing!
   } else if (r.decision === "skipUsingRemoteDelTooLarge") {
     // do nothing!
-  } else if (r.decision === "sameFileSize") {
-    // do nothing!
   } else throw Error(`unknown decision in ${JSON.stringify(r)}`);
 };
 
@@ -1225,8 +1216,6 @@ const splitThreeSteps = (syncPlan: SyncPlanType, sortedKeys: string[]) => {
         uploadDownloads[0].push(val); // only one level needed here
       }
       realTotalCount += 1;
-    } else if (val.decision === "sameFileSize") {
-      console.log('%c远程与本地大小相同,%c跳过上传', 'color: blue', 'color: green')
     } else {
       throw Error(`unknown decision ${val.decision} for ${key}`);
     }
@@ -1305,7 +1294,7 @@ export const doActualSync = async (
         localDeleteFunc,
         password
       );
-      console.log(`finished ${key}`);
+      // console.log(`finished ${key}`);
     }
 
     return; // shortcut return, avoid too many nests below
@@ -1344,8 +1333,6 @@ export const doActualSync = async (
         const key = val.key;
 
         const fn = async () => {
-          console.log(`start syncing "${key}" with plan ${JSON.stringify(val)}`);
-
           if (callbackSyncProcess !== undefined) {
             await callbackSyncProcess(
               realCounter,

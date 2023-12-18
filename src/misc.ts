@@ -45,7 +45,7 @@ export const normalizePath = (
   path: string
 ) => {
   if (!(path)) {
-    throw Error("missing path for normalizePath")
+    throw Error("missing path for normalizePath...")
   }
   // Replace backslashes with forward slashes
   path = path.replace(/\\/g, '/');

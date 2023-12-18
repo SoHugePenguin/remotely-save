@@ -9,11 +9,11 @@ import {
   OAUTH2_FORCE_EXPIRE_MILLISECONDS,
   OnedriveConfig,
   RemoteItem,
-} from "./baseTypes";
-import {decryptArrayBuffer, encryptArrayBuffer} from "./encrypt";
-import {bufferToArrayBuffer, getRandomArrayBuffer, getRandomIntInclusive, mkdirpInVault,} from "./misc";
+} from "../baseTypes";
+import {decryptArrayBuffer, encryptArrayBuffer} from "../encrypt";
+import {bufferToArrayBuffer, getRandomArrayBuffer, getRandomIntInclusive, mkdirpInVault,} from "../misc";
 
-import {log} from "./moreOnLog";
+import {log} from "../moreOnLog";
 
 const SCOPES = ["User.Read", "Files.ReadWrite.AppFolder", "offline_access"];
 const REDIRECT_URI = `obsidian://${COMMAND_CALLBACK_ONEDRIVE}`;

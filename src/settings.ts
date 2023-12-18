@@ -19,14 +19,17 @@ import {
   insertLoggerOutputByVault,
 } from "./localdb";
 import type RemotelySavePlugin from "./main"; // unavoidable
-import {RemoteClient} from "./remote";
+import {RemoteClient} from "./remote/remote";
 import {
   DEFAULT_DROPBOX_CONFIG,
   getAuthUrlAndVerifier as getAuthUrlAndVerifierDropbox,
   sendAuthReq as sendAuthReqDropbox,
   setConfigBySuccessfullAuthInplace,
-} from "./remoteForDropbox";
-import {DEFAULT_ONEDRIVE_CONFIG, getAuthUrlAndVerifier as getAuthUrlAndVerifierOnedrive,} from "./remoteForOnedrive";
+} from "./remote/remoteForDropbox";
+import {
+  DEFAULT_ONEDRIVE_CONFIG,
+  getAuthUrlAndVerifier as getAuthUrlAndVerifierOnedrive,
+} from "./remote/remoteForOnedrive";
 import {messyConfigToNormal} from "./configPersist";
 import type {TransItemType} from "./i18n";
 import {checkHasSpecialCharForDir} from "./misc";

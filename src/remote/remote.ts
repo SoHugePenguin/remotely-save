@@ -1,5 +1,5 @@
 import {Vault} from "obsidian";
-import type {DropboxConfig, OnedriveConfig, S3Config, SUPPORTED_SERVICES_TYPE, WebdavConfig,} from "./baseTypes";
+import type {DropboxConfig, OnedriveConfig, S3Config, SUPPORTED_SERVICES_TYPE, WebdavConfig,} from "../baseTypes";
 import * as dropbox from "./remoteForDropbox";
 import * as onedrive from "./remoteForOnedrive";
 import * as s3 from "./remoteForS3";

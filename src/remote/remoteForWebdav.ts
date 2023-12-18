@@ -4,15 +4,15 @@ import {Queue} from "@fyears/tsqueue";
 import chunk from "lodash/chunk";
 import flatten from "lodash/flatten";
 import {getReasonPhrase} from "http-status-codes";
-import {RemoteItem, VALID_REQURL, WebdavConfig} from "./baseTypes";
-import {decryptArrayBuffer, encryptArrayBuffer} from "./encrypt";
-import {mkdirpInVault} from "./misc";
+import {RemoteItem, VALID_REQURL, WebdavConfig} from "../baseTypes";
+import {decryptArrayBuffer, encryptArrayBuffer} from "../encrypt";
+import {mkdirpInVault} from "../misc";
 
-import {log} from "./moreOnLog";
+import {log} from "../moreOnLog";
 
 import type {FileStat, RequestOptionsWithState, Response, ResponseDataDetailed, WebDAVClient,} from "webdav/web";
 import {AuthType, createClient, getPatcher} from "webdav/web";
-import {downloadByWebDav} from "./penguin";
+import {downloadByWebDav, formatSize, verificationRemote} from "../penguin";
 
 if (VALID_REQURL) {
   getPatcher().patch(
@@ -295,21 +295,25 @@ export const uploadToRemote = async (
       else localContent = rawContent;
     } else {
       // 这里不该一次性全读过来
-      new Notice("开始读取文件: " + fileOrFolderPath)
+      console.log("开始读取文件: " + fileOrFolderPath)
       try {
         localContent = await vault.adapter.readBinary(fileOrFolderPath);
       } catch (e) {
         new Notice(e);
       }
-      new Notice(localContent.byteLength + "字节");
     }
     let remoteContent = localContent;
 
-    if (password !== "") remoteContent = await encryptArrayBuffer(localContent, password);
+    // 判断sha256文件特征不一致再上传，否则严重滥用问题。
+    const info = await verificationRemote(client, uploadFile, vault);
+    if (!info.isSame) {
+      new Notice(fileOrFolderPath + "，计划上传！ size: " + formatSize(localContent.byteLength))
+      if (password !== "") remoteContent = await encryptArrayBuffer(localContent, password);
+      await client.client.putFileContents(uploadFile, remoteContent, {
+        overwrite: true,
+      });
+    } else console.log(fileOrFolderPath + "完全一致的文件,不上传！");
 
-    await client.client.putFileContents(uploadFile, remoteContent, {
-      overwrite: true,
-    });
     return await getRemoteMeta(client, uploadFile);
   }
 };
@@ -385,10 +389,11 @@ export const listFromRemote = async (
 
 const downloadFromRemoteRaw = async (
   client: WrappedWebdavClient,
-  fileOrFolderPath: string
+  fileOrFolderPath: string,
+  vault: Vault
 ) => {
   await client.init();
-  return await downloadByWebDav(client, fileOrFolderPath);
+  return await downloadByWebDav(client, fileOrFolderPath, vault);
 };
 
 export const downloadFromRemote = async (
@@ -412,7 +417,7 @@ export const downloadFromRemote = async (
     let downloadFile = fileOrFolderPath;
     if (password !== "") downloadFile = remoteEncryptedKey;
     downloadFile = getWebdavPath(downloadFile, client.remoteBaseDir);
-    const remoteContent = await downloadFromRemoteRaw(client, downloadFile);
+    const remoteContent = await downloadFromRemoteRaw(client, downloadFile, vault);
     let localContent = remoteContent;
 
     // 解密

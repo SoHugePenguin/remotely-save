@@ -14,20 +14,20 @@ import {
   loadFileHistoryTableByVault,
   prepareDBs,
 } from "./localdb";
-import {RemoteClient} from "./remote";
+import {RemoteClient} from "./remote/remote";
 import {
   DEFAULT_DROPBOX_CONFIG,
   sendAuthReq as sendAuthReqDropbox,
   setConfigBySuccessfullAuthInplace as setConfigBySuccessfullAuthInplaceDropbox,
-} from "./remoteForDropbox";
+} from "./remote/remoteForDropbox";
 import {
   AccessCodeResponseSuccessfulType,
   DEFAULT_ONEDRIVE_CONFIG,
   sendAuthReq as sendAuthReqOnedrive,
   setConfigBySuccessfullAuthInplace as setConfigBySuccessfullAuthInplaceOnedrive,
-} from "./remoteForOnedrive";
-import {DEFAULT_S3_CONFIG} from "./remoteForS3";
-import {DEFAULT_WEBDAV_CONFIG} from "./remoteForWebdav";
+} from "./remote/remoteForOnedrive";
+import {DEFAULT_S3_CONFIG} from "./remote/remoteForS3";
+import {DEFAULT_WEBDAV_CONFIG} from "./remote/remoteForWebdav";
 import {RemotelySaveSettingTab} from "./settings";
 import {doActualSync, fetchMetadataFile, getSyncPlan, isPasswordOk, parseRemoteItems, SyncStatusType} from "./sync";
 import {messyConfigToNormal, normalConfigToMessy} from "./configPersist";
@@ -52,6 +52,8 @@ export function getBasePath() {
     return this.app.vault.adapter.getResourcePath("").split("?")[0];
   }
 }
+
+export let mainClient: RemoteClient;
 
 
 const DEFAULT_SETTINGS: RemotelySavePluginSettings = {
@@ -168,7 +170,7 @@ export default class RemotelySavePlugin extends Plugin {
       );
       this.syncStatus = "getting_remote_files_list";
       const self = this;
-      const client = new RemoteClient(
+      mainClient = new RemoteClient(
         this.settings.serviceType,
         this.settings.s3,
         this.settings.webdav,
@@ -177,7 +179,7 @@ export default class RemotelySavePlugin extends Plugin {
         this.app.vault.getName(),
         () => self.saveSettings()
       );
-      const remoteRsp = await client.listFromRemote();
+      const remoteRsp = await mainClient.listFromRemote();
 
       getNotice(
         t("syncrun_step3", {
@@ -204,14 +206,14 @@ export default class RemotelySavePlugin extends Plugin {
         remoteRsp.Contents,
         this.db,
         this.vaultRandomID,
-        client.serviceType,
+        mainClient.serviceType,
         this.settings.password
       );
 
 
       const origMetadataOnRemote = await fetchMetadataFile(
         metadataFile,
-        client,
+        mainClient,
         this.app.vault,
         this.settings.password
       );
@@ -248,7 +250,7 @@ export default class RemotelySavePlugin extends Plugin {
         localConfigDirContents,
         origMetadataOnRemote.deletions,
         localHistory,
-        client.serviceType,
+        mainClient.serviceType,
         triggerSource,
         this.app.vault,
         this.settings.syncConfigDir,
@@ -271,7 +273,7 @@ export default class RemotelySavePlugin extends Plugin {
 
         this.syncStatus = "syncing";
         await doActualSync(
-          client,
+          mainClient,
           this.db,
           this.vaultRandomID,
           this.app.vault,

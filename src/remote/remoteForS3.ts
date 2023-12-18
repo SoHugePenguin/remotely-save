@@ -23,10 +23,10 @@ import * as mime from "mime-types";
 import {requestUrl, RequestUrlParam, Vault} from "obsidian";
 import {Readable} from "stream";
 import AggregateError from "aggregate-error";
-import {DEFAULT_CONTENT_TYPE, RemoteItem, S3Config, VALID_REQURL,} from "./baseTypes";
-import {decryptArrayBuffer, encryptArrayBuffer} from "./encrypt";
-import {bufferToArrayBuffer, mkdirpInVault,} from "./misc";
-import {log} from "./moreOnLog";
+import {DEFAULT_CONTENT_TYPE, RemoteItem, S3Config, VALID_REQURL,} from "../baseTypes";
+import {decryptArrayBuffer, encryptArrayBuffer} from "../encrypt";
+import {bufferToArrayBuffer, mkdirpInVault,} from "../misc";
+import {log} from "../moreOnLog";
 
 export {S3Client} from "@aws-sdk/client-s3";
 

@@ -1,6 +1,6 @@
 import {base32, base64url} from "rfc4648";
 import {bufferToArrayBuffer} from "./misc";
-import {blockSize} from "./penguin";
+import {blockSize, sha256Length} from "./penguin";
 
 
 const DEFAULT_ITER = 20000;
@@ -51,10 +51,10 @@ export const encryptArrayBuffer = async (
   let resultBuffer: ArrayBuffer[] = [];
   let startPosition = 0;
 
+
   while (startPosition < arrBuf.byteLength) {
     const endPosition = Math.min(startPosition + blockSize, arrBuf.byteLength);
     const chunk = arrBuf.slice(startPosition, endPosition);
-
     const enc = await window.crypto.subtle.encrypt(
       {name: "AES-GCM", iv: iv},
       keyCrypt,
@@ -64,23 +64,24 @@ export const encryptArrayBuffer = async (
     resultBuffer.push(enc);
     startPosition += blockSize;
   }
-
-  return combineChunks(salt, iv, resultBuffer);
+  const buff = await crypto.subtle.digest('SHA-256', arrBuf);
+  return combineChunks(buff, salt, iv, resultBuffer);
 };
 
-function combineChunks(salt: Uint8Array, iv: Uint8Array, chunks: ArrayBuffer[]): ArrayBuffer {
-  // 计算总长度：盐的长度 + IV 的长度 + 所有加密块的长度
-  const totalLength = salt.length + iv.length + chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0);
-
+function combineChunks(buff: ArrayBuffer, salt: Uint8Array, iv: Uint8Array, chunks: ArrayBuffer[]): ArrayBuffer {
+  // 计算总长度：buff 的长度 + 盐的长度 + IV 的长度 + 所有加密块的长度
+  const totalLength = buff.byteLength + salt.length + iv.length + chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0);
   // 创建一个新的 Uint8Array 来存储组合的结果
   const combined = new Uint8Array(totalLength);
-
+  // 设置 buff
+  combined.set(new Uint8Array(buff), 0);
   // 设置盐和 IV
-  combined.set(salt, 0);
-  combined.set(iv, salt.length);
-
+  let offset = buff.byteLength;
+  combined.set(salt, offset);
+  offset += salt.length;
+  combined.set(iv, offset);
+  offset += iv.length;
   // 追加每个加密块的数据
-  let offset = salt.length + iv.length;
   chunks.forEach(chunk => {
     combined.set(new Uint8Array(chunk), offset);
     offset += chunk.byteLength;
@@ -94,9 +95,9 @@ export const decryptArrayBuffer = async (
   password: string,
   rounds: number = DEFAULT_ITER
 ): Promise<ArrayBuffer> => {
-  const salt = arrBuf.slice(0, 16); // first 16 bytes are salt
-  const iv = arrBuf.slice(16, 28); // next 12 bytes are IV
-  const cipherText = arrBuf.slice(28); // remaining bytes are ciphertext
+  const salt = arrBuf.slice(sha256Length, 16 + sha256Length); // first 16 bytes are salt
+  const iv = arrBuf.slice(16 + sha256Length, 28 + sha256Length); // next 12 bytes are IV
+  const cipherText = arrBuf.slice(28 + sha256Length); // remaining bytes are ciphertext
 
   const key = await getKeyFromPassword(
     new Uint8Array(salt),

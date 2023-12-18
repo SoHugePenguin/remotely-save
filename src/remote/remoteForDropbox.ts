@@ -2,10 +2,10 @@ import delay from "delay";
 import type {DropboxResponse, DropboxResponseError, files} from "dropbox";
 import {Dropbox, DropboxAuth} from "dropbox";
 import {requestUrl, RequestUrlParam, Vault} from "obsidian";
-import {bufferToArrayBuffer, dirname, getFolderLevels, hasEmojiInText, headersToRecord, mkdirpInVault} from "./misc";
-import {COMMAND_CALLBACK_DROPBOX, DropboxConfig, OAUTH2_FORCE_EXPIRE_MILLISECONDS, RemoteItem,} from "./baseTypes";
-import {decryptArrayBuffer, encryptArrayBuffer} from "./encrypt";
-import {log} from "./moreOnLog";
+import {bufferToArrayBuffer, dirname, getFolderLevels, hasEmojiInText, headersToRecord, mkdirpInVault} from "../misc";
+import {COMMAND_CALLBACK_DROPBOX, DropboxConfig, OAUTH2_FORCE_EXPIRE_MILLISECONDS, RemoteItem,} from "../baseTypes";
+import {decryptArrayBuffer, encryptArrayBuffer} from "../encrypt";
+import {log} from "../moreOnLog";
 
 export {Dropbox} from "dropbox";
 

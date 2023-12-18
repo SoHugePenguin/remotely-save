@@ -1,31 +1,35 @@
-import {WrappedWebdavClient} from "./remoteForWebdav";
-import {Notice} from "obsidian";
+import {WrappedWebdavClient} from "./remote/remoteForWebdav";
+import {Notice, Vault} from "obsidian";
+import {mainClient} from "./main";
+import {decryptBase64urlToString} from "./encrypt";
+import {normalizePath} from "./misc";
 
 
 export const blockSize = 1024 * 1024 * 10;
+export const sha256Length = 32;
 
-export async function downloadByWebDav(client: WrappedWebdavClient, fileOrFolderPath: string)
+
+class RemoteLocalInfo {
+  blockCount = 0;
+  total = 0;
+  remoteFileOrFolderName = "";
+  isSame = false;
+
+
+  constructor(blockCount: number, total: number, remoteFileOrFolderName: string, isSame: boolean) {
+    this.blockCount = blockCount;
+    this.total = total;
+    this.remoteFileOrFolderName = remoteFileOrFolderName;
+    this.isSame = isSame;
+  }
+}
+
+export async function downloadByWebDav(client: WrappedWebdavClient, fileOrFolderPath: string, vault: Vault)
   : Promise<ArrayBuffer> {
+  const info = await verificationRemote(client, fileOrFolderPath, vault);
+
   let resultBuffer = new Uint8Array(); // 初始化一个空的 Uint8Array
-
-  let blockCount = 0;
-  let total = 0;
-  await client.client.stat(fileOrFolderPath)
-    .then(statResult => {
-      if ('size' in statResult && 'ctime' in statResult && 'mtime' in statResult) {
-        // 处理 FileStat 对象
-        const blockCount = Math.ceil(statResult.size / blockSize);
-      } else {
-        // 处理 ResponseDataDetailed 对象或其他类型的响应
-        total = "size" in statResult ? statResult.size : 0;
-        blockCount = Math.ceil(total / blockSize)
-      }
-    })
-    .catch(error => {
-      console.error('获取统计信息时出错:', error);
-    });
-
-  for (let blockIndex = 0; blockIndex < blockCount; blockIndex++) {
+  for (let blockIndex = 0; blockIndex < info.blockCount; blockIndex++) {
     let requestOptions = {
       method: "GET",
       responseType: "arraybuffer",
@@ -42,19 +46,65 @@ export async function downloadByWebDav(client: WrappedWebdavClient, fileOrFolder
         combined.set(resultBuffer);
         combined.set(currentBlock, resultBuffer.length);
         resultBuffer = combined;
-
-        new Notice("文件下载: " + formatSize(resultBuffer.byteLength) + "/" + formatSize(total));
-      } else {
-        // 如果响应没有数据，跳出循环
-        new Notice("我他妈下完辣！ " + "这个文件大概" + blockIndex + "MB再小一点的样子")
-        break;
+        new Notice("文件下载: " + formatSize(resultBuffer.byteLength) + "/" + formatSize(info.total));
       }
     } catch (error) {
-      console.log(error)
+      console.log(error + "penguin1")
     }
   }
-
   return resultBuffer.buffer;
+}
+
+
+export async function verificationRemote(client: WrappedWebdavClient, fileOrFolderPath: string, vault: Vault): Promise<RemoteLocalInfo> {
+  let isSame = false;
+  let blockCount = 0;
+  let total = 0;
+  let remoteFileOrFolderName = "";
+  await client.client.stat(fileOrFolderPath)
+    .then(statResult => {
+      if ('size' in statResult && 'ctime' in statResult && 'mtime' in statResult) {
+        // 处理 FileStat 对象
+        blockCount = Math.ceil(statResult.size / blockSize);
+      } else {
+        // 处理 ResponseDataDetailed 对象或其他类型的响应
+        remoteFileOrFolderName = "basename" in statResult ? statResult.basename : "";
+        total = "size" in statResult ? statResult.size : 0;
+        blockCount = Math.ceil(total / blockSize)
+      }
+    })
+    .catch(error => {
+      if (error.status == '404') {
+        console.log(fileOrFolderPath + "远程加密文件不存在(可能是本地有改动)！")
+      } else console.error('获取统计信息时出错:', error);
+    });
+
+  // 判断md5是否和本地一致
+  let requestOptions = {
+    method: "GET",
+    responseType: "arraybuffer",
+    headers: {
+      Range: `bytes=0-31`
+    }
+  };
+  try {
+    const trueFileOrFolderPath = await decryptBase64urlToString(remoteFileOrFolderName,
+      mainClient.webdavConfig.password);
+    const response = await client.client.customRequest(fileOrFolderPath, requestOptions);
+    if (response.data instanceof ArrayBuffer &&
+      response.data.byteLength > 0) {
+      if (vault != undefined && await vault.adapter.exists(normalizePath(trueFileOrFolderPath))) {
+        let localContent = await vault.adapter.readBinary(trueFileOrFolderPath);
+        const sha256Value = await crypto.subtle.digest('SHA-256', localContent);
+        const buffer1 = Buffer.from(response.data);
+        const buffer2 = Buffer.from(sha256Value);
+        isSame = buffer1.equals(buffer2);
+      }
+    }
+  } catch (error) {
+    console.error(error + "penguin2")
+  }
+  return new RemoteLocalInfo(blockCount, total, remoteFileOrFolderName, isSame);
 }
 
 export function formatSize(size: number) {
@@ -66,18 +116,3 @@ export function formatSize(size: number) {
     return (size / 1048576).toFixed(2) + " MB";
   } else return (size / 1073741824).toFixed(2) + " GB";
 }
-
-// 比较两个 ArrayBuffer 是否相同
-export async function compareArrayBuffers(buffer1: ArrayBuffer, buffer2: ArrayBuffer): Promise<boolean> {
-  const md5Hash1 = await calculateMD5(buffer1);
-  const md5Hash2 = await calculateMD5(buffer2);
-  return md5Hash1 === md5Hash2;
-}
-
-// 计算 ArrayBuffer 的 MD5 哈希值
-async function calculateMD5(arrayBuffer: ArrayBuffer): Promise<string> {
-  const buffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
-  const hashArray = Array.from(new Uint8Array(buffer));
-  return hashArray.map(byte => byte.toString(16).padStart(2, "0")).join("");
-}
-
