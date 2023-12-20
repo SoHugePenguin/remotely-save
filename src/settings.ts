@@ -15,6 +15,7 @@ import {
   clearAllSyncMetaMapping,
   clearAllSyncPlanRecords,
   clearExpiredLoggerOutputRecords,
+  deleteUnreferencedFiles,
   destroyDBs,
   insertLoggerOutputByVault,
 } from "./localdb";
@@ -814,11 +815,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
               }`
             )
             .onChange(async (value) => {
-              if (value === "enable") {
-                this.plugin.settings.s3.bypassCorsLocally = true;
-              } else {
-                this.plugin.settings.s3.bypassCorsLocally = false;
-              }
+              this.plugin.settings.s3.bypassCorsLocally = value === "enable";
               await this.plugin.saveSettings();
             });
         });
@@ -839,8 +836,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
         dropdown
           .setValue(`${this.plugin.settings.s3.partsConcurrency}`)
           .onChange(async (val) => {
-            const realVal = parseInt(val);
-            this.plugin.settings.s3.partsConcurrency = realVal;
+            this.plugin.settings.s3.partsConcurrency = parseInt(val);
             await this.plugin.saveSettings();
           });
       });
@@ -1440,10 +1436,10 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
       .setName(t("settings_chooseservice"))
       .setDesc(t("settings_chooseservice_desc"))
       .addDropdown(async (dropdown) => {
-        dropdown.addOption("s3", t("settings_chooseservice_s3"));
-        dropdown.addOption("dropbox", t("settings_chooseservice_dropbox"));
+        // dropdown.addOption("s3", t("settings_chooseservice_s3"));
+        // dropdown.addOption("dropbox", t("settings_chooseservice_dropbox"));
         dropdown.addOption("webdav", t("settings_chooseservice_webdav"));
-        dropdown.addOption("onedrive", t("settings_chooseservice_onedrive"));
+        // dropdown.addOption("onedrive", t("settings_chooseservice_onedrive"));
         dropdown
           .setValue(this.plugin.settings.serviceType)
           .onChange(async (val: SUPPORTED_SERVICES_TYPE) => {
@@ -1895,11 +1891,94 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
           new Notice(t("settings_resetcache_notice"));
         });
       });
+
+
+    // 2023.12  made in penguin
+    const DeleteUnreferencedFiles = containerEl.createEl("div");
+    DeleteUnreferencedFiles.createEl("h2", {text: t("settings_other")});
+
+    new Setting(DeleteUnreferencedFiles)
+      .setName(t("settings_deleteUnreferencedFiles"))
+      .setDesc(t("settings_deleteUnreferencedFiles_desc"))
+      .addButton(async (button) => {
+        button.setButtonText(t("settings_deleteUnreferencedFiles_button"));
+        button.onClick(async () => {
+          const deleteList = await deleteUnreferencedFiles(this.app.vault);
+          new DeleteFileModal(this.app, this.plugin, deleteList).open();
+        });
+      });
   }
+
 
   hide() {
     let {containerEl} = this;
     containerEl.empty();
     super.hide();
+  }
+}
+
+class DeleteFileModal extends Modal {
+  plugin: RemotelySavePlugin;
+  fileList: string[];
+
+  constructor(app: App, plugin: RemotelySavePlugin, fileList: string[]) {
+    super(app);
+    this.plugin = plugin;
+    this.fileList = fileList;
+  }
+
+  onOpen() {
+    let {contentEl} = this;
+    const t = (x: TransItemType, vars?: any) => {
+      return this.plugin.i18n.t(x, vars);
+    };
+
+    if (this.fileList.length > 0) contentEl.createEl("h2", {text: t("modal_deleteFileModal_title")});
+    else contentEl.createEl("h2", {text: t("modal_deleteFileModal_cleared_title")});
+
+    for (let f of this.fileList) {
+      contentEl.createEl("p", {
+        text: f,
+      });
+    }
+    if (this.fileList.length > 0) {
+      new Setting(contentEl)
+        .addButton((button) => {
+          button.setButtonText(t("modal_deleteFileModal_submit"));
+          button.onClick(async () => {
+
+            // 确认删除
+            for (let f of this.fileList) {
+              await this.plugin.app.vault.adapter.remove(f);
+            }
+
+            new Notice(t("modal_deleteFileModal_notice"));
+            this.close();
+          });
+          button.setClass("password-second-confirm");
+        })
+        .addButton((button) => {
+          button.setButtonText(t("modal_deleteFileModal_cancel"));
+          button.onClick(() => {
+            this.close();
+          });
+        });
+    }else {
+      new Setting(contentEl)
+        .addButton((button) => {
+          button.setButtonText(t("modal_deleteFileModal_cleared"));
+          button.onClick(() => {
+            this.close();
+          });
+        });
+    }
+
+
+
+  }
+
+  onClose() {
+    let {contentEl} = this;
+    contentEl.empty();
   }
 }

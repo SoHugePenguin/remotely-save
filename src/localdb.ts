@@ -1,6 +1,6 @@
 import localforage from "localforage";
 import {nanoid} from "nanoid";
-import {requireApiVersion, TAbstractFile, TFile, TFolder} from "obsidian";
+import {requireApiVersion, TAbstractFile, TFile, TFolder, Vault} from "obsidian";
 
 import {API_VER_STAT_FOLDER, SUPPORTED_SERVICES_TYPE} from "./baseTypes";
 import type {SyncPlanType} from "./sync";
@@ -518,11 +518,7 @@ export const readAllSyncPlanRecordTextsByVault = async (
   });
   records.sort((a, b) => -(a.ts - b.ts)); // descending
 
-  if (records === undefined) {
-    return [] as string[];
-  } else {
-    return records.map((x) => x.syncPlan);
-  }
+  return records.map((x) => x.syncPlan);
 };
 
 /**
@@ -654,3 +650,51 @@ export const clearExpiredLoggerOutputRecords = async (db: InternalDBs) => {
   });
   await Promise.all(ps);
 };
+
+
+// 2023.12 made in penguin
+export const deleteUnreferencedFiles = async (vault: Vault) => {
+  const noMdResult = await noMdFileSearch(vault, ["/"], []);
+  const mdResult = await mdFileSearch(vault, ["/"], []);
+
+  let linkMdSet: Set<string> = new Set();
+  for (let mdFile of mdResult) {
+    const text = await vault.adapter.read(mdFile);
+    const regex = /!\[\[([^\]]+)]]/g;
+    let matches;
+    while ((matches = regex.exec(text)) !== null) {
+      const match = matches[1];
+      if (!match.endsWith('.md')) {
+        linkMdSet.add(match);
+      }
+    }
+  }
+  // 过滤掉以 linkMdSet 中任何字符串结尾的元素
+  return noMdResult.filter(item => ![...linkMdSet].some(setItem => item.endsWith(setItem)));
+};
+
+async function noMdFileSearch(vault: Vault, folder: string[], result: string[]): Promise<string[]> {
+  for (let fo of folder) {
+    if (fo.startsWith(".")) continue;
+    const files = await vault.adapter.list(fo);
+    for (let file of files.files) {
+      if (!file.endsWith(".md")) result.push(file);
+    }
+    if (files.folders.length > 0) await noMdFileSearch(vault, files.folders, result);
+  }
+  return result;
+}
+
+async function mdFileSearch(vault: Vault, folder: string[], result: string[]): Promise<string[]> {
+  for (let fo of folder) {
+    if (fo.startsWith(".")) continue;
+    const files = await vault.adapter.list(fo);
+    for (let file of files.files) {
+      if (file.endsWith(".md")) result.push(file);
+    }
+    if (files.folders.length > 0) await mdFileSearch(vault, files.folders, result);
+  }
+  return result;
+}
+
+

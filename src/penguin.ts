@@ -1,13 +1,12 @@
 import {WrappedWebdavClient} from "./remote/remoteForWebdav";
-import {Notice, Vault} from "obsidian";
-import {mainClient} from "./main";
+import {Vault} from "obsidian";
+import {baseNotice} from "./main";
 import {decryptBase64urlToString} from "./encrypt";
 import {normalizePath} from "./misc";
 
 
 export const blockSize = 1024 * 1024 * 10;
 export const sha256Length = 32;
-
 
 class RemoteLocalInfo {
   blockCount = 0;
@@ -16,7 +15,10 @@ class RemoteLocalInfo {
   isSame = false;
 
 
-  constructor(blockCount: number, total: number, remoteFileOrFolderName: string, isSame: boolean) {
+  constructor(blockCount: number,
+              total: number,
+              remoteFileOrFolderName: string,
+              isSame: boolean) {
     this.blockCount = blockCount;
     this.total = total;
     this.remoteFileOrFolderName = remoteFileOrFolderName;
@@ -24,11 +26,16 @@ class RemoteLocalInfo {
   }
 }
 
-export async function downloadByWebDav(client: WrappedWebdavClient, fileOrFolderPath: string, vault: Vault)
+export async function downloadByWebDav(client: WrappedWebdavClient,
+                                       fileOrFolderPath: string,
+                                       vault: Vault,
+                                       password: string)
   : Promise<ArrayBuffer> {
-  const info = await verificationRemote(client, fileOrFolderPath, vault);
+  const info = await verificationRemote(client, fileOrFolderPath, vault, password);
 
   let resultBuffer = new Uint8Array(); // 初始化一个空的 Uint8Array
+
+  // 进度条
   for (let blockIndex = 0; blockIndex < info.blockCount; blockIndex++) {
     let requestOptions = {
       method: "GET",
@@ -46,7 +53,7 @@ export async function downloadByWebDav(client: WrappedWebdavClient, fileOrFolder
         combined.set(resultBuffer);
         combined.set(currentBlock, resultBuffer.length);
         resultBuffer = combined;
-        new Notice("文件下载: " + formatSize(resultBuffer.byteLength) + "/" + formatSize(info.total));
+        baseNotice.setMessage("文件下载: " + formatSize(resultBuffer.byteLength) + "/" + formatSize(info.total));
       }
     } catch (error) {
       console.log(error + "penguin1")
@@ -56,7 +63,11 @@ export async function downloadByWebDav(client: WrappedWebdavClient, fileOrFolder
 }
 
 
-export async function verificationRemote(client: WrappedWebdavClient, fileOrFolderPath: string, vault: Vault): Promise<RemoteLocalInfo> {
+export async function verificationRemote(
+  client: WrappedWebdavClient,
+  fileOrFolderPath: string,
+  vault: Vault,
+  password: string): Promise<RemoteLocalInfo> {
   let isSame = false;
   let blockCount = 0;
   let total = 0;
@@ -88,8 +99,7 @@ export async function verificationRemote(client: WrappedWebdavClient, fileOrFold
     }
   };
   try {
-    const trueFileOrFolderPath = await decryptBase64urlToString(remoteFileOrFolderName,
-      mainClient.webdavConfig.password);
+    const trueFileOrFolderPath = await decryptBase64urlToString(remoteFileOrFolderName, password);
     const response = await client.client.customRequest(fileOrFolderPath, requestOptions);
     if (response.data instanceof ArrayBuffer &&
       response.data.byteLength > 0) {
@@ -106,6 +116,23 @@ export async function verificationRemote(client: WrappedWebdavClient, fileOrFold
   }
   return new RemoteLocalInfo(blockCount, total, remoteFileOrFolderName, isSame);
 }
+
+
+export async function penguinUploadToRemote(
+  client: WrappedWebdavClient,
+  remoteUrl: string,
+  fileToUpload: ArrayBuffer,
+  fileName: string) {
+  baseNotice.setMessage("正在上传: " + fileName + " size: " + formatSize(fileToUpload.byteLength))
+  try {
+    await client.client.putFileContents(remoteUrl, fileToUpload, {
+      overwrite: true,
+    });
+  } catch (error) {
+    console.error("上传错误：" + error);
+  }
+}
+
 
 export function formatSize(size: number) {
   if (size < 1024) {

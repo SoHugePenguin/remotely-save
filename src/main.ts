@@ -55,6 +55,7 @@ export function getBasePath() {
 
 export let mainClient: RemoteClient;
 
+export let baseNotice:Notice;
 
 const DEFAULT_SETTINGS: RemotelySavePluginSettings = {
   s3: DEFAULT_S3_CONFIG,
@@ -103,6 +104,7 @@ export default class RemotelySavePlugin extends Plugin {
   vaultRandomID: string;
 
   async syncRun(triggerSource: SyncTriggerSourceType = "manual") {
+    baseNotice = new Notice("", 0);
     const t = (x: TransItemType, vars?: any) => {
       return this.i18n.t(x, vars);
     };
@@ -148,26 +150,25 @@ export default class RemotelySavePlugin extends Plugin {
       const MAX_STEPS = 8;
 
       if (triggerSource === "dry") {
-        getNotice(
-          t("syncrun_step0", {
-            maxSteps: `${MAX_STEPS}`,
-          })
-        );
+        baseNotice.setMessage("0 Remotely Sync 在空跑（dry run）模式，不会发生实际的文件交换。")
       }
 
-      getNotice(
-        t("syncrun_step1", {
-          maxSteps: `${MAX_STEPS}`,
-          serviceType: this.settings.serviceType,
-        })
-      );
+      // getNotice(
+      //   t("syncrun_step1", {
+      //     maxSteps: `${MAX_STEPS}`,
+      //     serviceType: this.settings.serviceType,
+      //   })
+      // );
+      baseNotice.setMessage(`1 Remotely Sync 准备同步${this.settings.serviceType}`)
       this.syncStatus = "preparing";
 
-      getNotice(
-        t("syncrun_step2", {
-          maxSteps: `${MAX_STEPS}`,
-        })
-      );
+      // getNotice(
+      //   t("syncrun_step2", {
+      //     maxSteps: `${MAX_STEPS}`,
+      //   })
+      // );
+      baseNotice.setMessage("2 正在获取远端的元数据。")
+
       this.syncStatus = "getting_remote_files_list";
       const self = this;
       mainClient = new RemoteClient(
@@ -181,11 +182,12 @@ export default class RemotelySavePlugin extends Plugin {
       );
       const remoteRsp = await mainClient.listFromRemote();
 
-      getNotice(
-        t("syncrun_step3", {
-          maxSteps: `${MAX_STEPS}`,
-        })
-      );
+      // getNotice(
+      //   t("syncrun_step3", {
+      //     maxSteps: `${MAX_STEPS}`,
+      //   })
+      // );
+      baseNotice.setMessage("3 正在检查密码正确与否。");
       this.syncStatus = "checking_password";
       const passwordCheckResult = await isPasswordOk(
         remoteRsp.Contents,
@@ -196,11 +198,12 @@ export default class RemotelySavePlugin extends Plugin {
         throw Error(passwordCheckResult.reason);
       }
 
-      getNotice(
-        t("syncrun_step4", {
-          maxSteps: `${MAX_STEPS}`,
-        })
-      );
+      // getNotice(
+      //   t("syncrun_step4", {
+      //     maxSteps: `${MAX_STEPS}`,
+      //   })
+      // );
+      baseNotice.setMessage("4 正在获取远端的额外的元数据。")
       this.syncStatus = "getting_remote_extra_meta";
       const {remoteStates, metadataFile} = await parseRemoteItems(
         remoteRsp.Contents,
@@ -218,11 +221,13 @@ export default class RemotelySavePlugin extends Plugin {
         this.settings.password
       );
 
-      getNotice(
-        t("syncrun_step5", {
-          maxSteps: `${MAX_STEPS}`,
-        })
-      );
+      // getNotice(
+      //   t("syncrun_step5", {
+      //     maxSteps: `${MAX_STEPS}`,
+      //   })
+      // );
+      baseNotice.setMessage("5 正在获取本地的元数据。")
+
       this.syncStatus = "getting_local_meta";
       const local = this.app.vault.getAllLoadedFiles();
       const localHistory = await loadFileHistoryTableByVault(
@@ -238,11 +243,13 @@ export default class RemotelySavePlugin extends Plugin {
         );
       }
 
-      getNotice(
-        t("syncrun_step6", {
-          maxSteps: `${MAX_STEPS}`,
-        })
-      );
+      // getNotice(
+      //   t("syncrun_step6", {
+      //     maxSteps: `${MAX_STEPS}`,
+      //   })
+      // );
+      baseNotice.setMessage("6 正在生成同步计划。")
+
       this.syncStatus = "generating_plan";
       const {plan, sortedKeys, deletions, sizesGoWrong} = await getSyncPlan(
         remoteStates,
@@ -265,11 +272,12 @@ export default class RemotelySavePlugin extends Plugin {
       // The operations below begins to write or delete (!!!) something.
 
       if (triggerSource !== "dry") {
-        getNotice(
-          t("syncrun_step7", {
-            maxSteps: `${MAX_STEPS}`,
-          })
-        );
+        // getNotice(
+        //   t("syncrun_step7", {
+        //     maxSteps: `${MAX_STEPS}`,
+        //   })
+        // );
+        baseNotice.setMessage("7 Remotely Sync 开始发生数据交换！");
 
         this.syncStatus = "syncing";
         await doActualSync(
@@ -309,10 +317,12 @@ export default class RemotelySavePlugin extends Plugin {
 
       getNotice(
         t("syncrun_step8", {
-          maxSteps: `${MAX_STEPS}`,
-        })
+          maxSteps: `${MAX_STEPS}`
+        }), 0
       );
       console.log("success all (╯°□°）╯︵ ┻━┻")
+      baseNotice.hide();
+
       this.syncStatus = "finish";
       this.syncStatus = "idle";
 

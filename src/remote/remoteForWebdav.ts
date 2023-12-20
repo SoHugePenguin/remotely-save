@@ -12,7 +12,7 @@ import {log} from "../moreOnLog";
 
 import type {FileStat, RequestOptionsWithState, Response, ResponseDataDetailed, WebDAVClient,} from "webdav/web";
 import {AuthType, createClient, getPatcher} from "webdav/web";
-import {downloadByWebDav, formatSize, verificationRemote} from "../penguin";
+import {downloadByWebDav, formatSize, penguinUploadToRemote, verificationRemote} from "../penguin";
 
 if (VALID_REQURL) {
   getPatcher().patch(
@@ -305,13 +305,13 @@ export const uploadToRemote = async (
     let remoteContent = localContent;
 
     // 判断sha256文件特征不一致再上传，否则严重滥用问题。
-    const info = await verificationRemote(client, uploadFile, vault);
+    const info = await verificationRemote(client, uploadFile, vault,password);
+
     if (!info.isSame) {
-      new Notice(fileOrFolderPath + "，计划上传！ size: " + formatSize(localContent.byteLength))
       if (password !== "") remoteContent = await encryptArrayBuffer(localContent, password);
-      await client.client.putFileContents(uploadFile, remoteContent, {
-        overwrite: true,
-      });
+
+      await penguinUploadToRemote(client, uploadFile, remoteContent, fileOrFolderPath);
+
     } else console.log(fileOrFolderPath + "完全一致的文件,不上传！");
 
     return await getRemoteMeta(client, uploadFile);
@@ -390,10 +390,11 @@ export const listFromRemote = async (
 const downloadFromRemoteRaw = async (
   client: WrappedWebdavClient,
   fileOrFolderPath: string,
-  vault: Vault
+  vault: Vault,
+  password:string
 ) => {
   await client.init();
-  return await downloadByWebDav(client, fileOrFolderPath, vault);
+  return await downloadByWebDav(client, fileOrFolderPath, vault,password);
 };
 
 export const downloadFromRemote = async (
@@ -417,9 +418,8 @@ export const downloadFromRemote = async (
     let downloadFile = fileOrFolderPath;
     if (password !== "") downloadFile = remoteEncryptedKey;
     downloadFile = getWebdavPath(downloadFile, client.remoteBaseDir);
-    const remoteContent = await downloadFromRemoteRaw(client, downloadFile, vault);
+    const remoteContent = await downloadFromRemoteRaw(client, downloadFile, vault,password);
     let localContent = remoteContent;
-
     // 解密
     if (password !== "") localContent = await decryptArrayBuffer(remoteContent, password);
 
